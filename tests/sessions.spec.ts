@@ -1,0 +1,83 @@
+import { describe, expect, it } from 'vitest'
+import { SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
+import { JumpServerError } from '../src/types.js'
+
+function fakeConnection(): SshConnection & { ended: boolean; commands: string[] } {
+  const commands: string[] = []
+  return {
+    commands,
+    ended: false,
+    async exec(command) {
+      commands.push(command)
+      return { exitCode: 0, stdout: `ok:${command}`, stderr: '', truncated: false }
+    },
+    async readFile(remotePath) {
+      return { path: remotePath, content: 'hello', encoding: 'utf8', truncated: false, byteLength: 5 }
+    },
+    async writeFile() {},
+    async end() {
+      this.ended = true
+    },
+  }
+}
+
+describe('SessionManager', () => {
+  it('opens, execs, and disconnects a session', async () => {
+    const conn = fakeConnection()
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => conn,
+    })
+    const info = await manager.open(input())
+    expect(info.session_id.startsWith('jms-')).toBe(true)
+    expect(manager.list()).toHaveLength(1)
+    const result = await manager.exec(info.session_id, 'uname -a')
+    expect(result.stdout).toBe('ok:uname -a')
+    expect(conn.commands).toEqual(['uname -a'])
+    await expect(manager.disconnect(info.session_id)).resolves.toEqual({
+      closed: true,
+      session_id: info.session_id,
+    })
+    expect(conn.ended).toBe(true)
+    expect(manager.list()).toHaveLength(0)
+  })
+
+  it('rejects unknown session ids', async () => {
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => fakeConnection(),
+    })
+    await expect(manager.exec('missing', 'true')).rejects.toBeInstanceOf(JumpServerError)
+  })
+
+  it('rejects oversized writes', async () => {
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 4,
+      connect: async () => fakeConnection(),
+    })
+    const info = await manager.open(input())
+    await expect(manager.writeFile(info.session_id, '/tmp/x', 'hello', 'utf8')).rejects.toBeInstanceOf(JumpServerError)
+    await manager.disposeAll()
+  })
+})
+
+function input(): OpenSessionInput {
+  return {
+    host: 'koko.example.com',
+    port: 2222,
+    username: 'JMS-tok',
+    password: 'secret',
+    assetId: 'asset-1',
+    account: 'root',
+    protocol: 'ssh',
+  }
+}
