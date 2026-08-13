@@ -13,11 +13,10 @@ import { JumpServerClient } from './client.js'
 import {
   DEFAULT_ACCESS_KEY_ID_ENV,
   DEFAULT_ACCESS_KEY_SECRET_ENV,
-  DEFAULT_ORG_ID,
   type Config as PluginConfig,
   type ResolvedConfig,
 } from './config.js'
-import { resolveAuth, resolveBaseUrl } from './credentials.js'
+import { resolveAuth, resolveBaseUrl, resolveEnableAssetAdmin, resolveOrgId } from './credentials.js'
 import { registerPrompt } from './prompt.js'
 import { SessionManager } from './sessions.js'
 import { registerAdminTools, registerCatalogTools } from './tools-catalog.js'
@@ -30,11 +29,11 @@ export type Config = PluginConfig
 
 export const Config: z<PluginConfig> = z.object({
   baseUrl: z.string(),
-  orgId: z.string().default(DEFAULT_ORG_ID),
+  orgId: z.string(),
   accessKeyIdEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_ID_ENV),
   accessKeySecretEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_SECRET_ENV),
   tlsRejectUnauthorized: z.boolean().default(true),
-  enableAssetAdmin: z.boolean().default(false),
+  enableAssetAdmin: z.boolean(),
   idleTimeoutMs: z.number().step(1).min(1_000).default(600_000),
   execTimeoutMs: z.number().step(1).min(1_000).default(120_000),
   outputMaxBytes: z.number().step(1).min(1024).default(512_000),
@@ -46,7 +45,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const resolved = config as ResolvedConfig
   const client = new JumpServerClient({
     baseUrl: () => resolveBaseUrl(resolved),
-    orgId: resolved.orgId,
+    orgId: () => resolveOrgId(resolved),
     tlsRejectUnauthorized: resolved.tlsRejectUnauthorized,
     auth: () => resolveAuth(ctx, resolved),
   })
@@ -65,7 +64,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   registerPrompt(ctx)
   registerCatalogTools(ctx, api)
   registerRuntimeTools(ctx, api, sessions, resolved)
-  if (resolved.enableAssetAdmin) registerAdminTools(ctx, api)
+  if (resolveEnableAssetAdmin(resolved)) registerAdminTools(ctx, api)
 }
 
 export { JumpServerApi } from './api.js'

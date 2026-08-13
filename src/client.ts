@@ -18,7 +18,7 @@ export interface ClientRequest {
 /** Construct a Core client. Auth and base URL are resolved per request so rotated keys apply immediately. */
 export interface JumpServerClientOptions {
   baseUrl: string | (() => string)
-  orgId: string
+  orgId: string | (() => string)
   auth: () => Promise<ResolvedAuth>
   tlsRejectUnauthorized: boolean
   fetchImpl?: FetchLike
@@ -54,7 +54,7 @@ export function signingPath(url: URL): string {
 /** JumpServer Core REST client. */
 export class JumpServerClient {
   private readonly baseUrl: string | (() => string)
-  private readonly orgId: string
+  private readonly orgId: string | (() => string)
   private readonly auth: () => Promise<ResolvedAuth>
   private readonly tlsRejectUnauthorized: boolean
   private readonly fetchImpl?: FetchLike
@@ -73,6 +73,10 @@ export class JumpServerClient {
   private resolveBaseUrl(): string {
     const value = typeof this.baseUrl === 'function' ? this.baseUrl() : this.baseUrl
     return value.replace(/\/+$/, '')
+  }
+
+  private resolveOrgId(): string {
+    return typeof this.orgId === 'function' ? this.orgId() : this.orgId
   }
 
   /** Perform a JSON API call and throw on unexpected HTTP errors. */
@@ -98,7 +102,7 @@ export class JumpServerClient {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       Date: date,
-      'X-JMS-ORG': this.orgId,
+      'X-JMS-ORG': this.resolveOrgId(),
     }
     let body: string | undefined
     if (spec.body !== undefined) {

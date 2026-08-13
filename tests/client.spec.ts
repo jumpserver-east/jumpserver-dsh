@@ -46,6 +46,25 @@ describe('JumpServerClient', () => {
     expect(headers.get('Authorization')).toMatch(/^Signature keyId="kid",algorithm="hmac-sha256"/)
   })
 
+  it('resolves X-JMS-ORG from a function each request', async () => {
+    let org = 'org-a'
+    const seen: string[] = []
+    const client = new JumpServerClient({
+      baseUrl: 'https://jms.example.com',
+      orgId: () => org,
+      tlsRejectUnauthorized: true,
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
+      fetchImpl: async (_url, init) => {
+        seen.push(new Headers(init.headers).get('X-JMS-ORG') ?? '')
+        return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+      },
+    })
+    await client.get('/api/v1/users/profile/')
+    org = 'org-b'
+    await client.get('/api/v1/users/profile/')
+    expect(seen).toEqual(['org-a', 'org-b'])
+  })
+
   it('throws JumpServerError with status on 403', async () => {
     const client = new JumpServerClient({
       baseUrl: 'https://jms.example.com',

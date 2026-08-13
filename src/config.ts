@@ -1,6 +1,12 @@
 /** JumpServer Default organization id. */
 export const DEFAULT_ORG_ID = '00000000-0000-0000-0000-000000000002'
 
+/** Environment variable for the organization UUID (`X-JMS-ORG`). */
+export const DEFAULT_ORG_ID_ENV = 'JUMPSERVER_ORG_ID'
+
+/** Environment variable that enables host create/update/delete tools. */
+export const DEFAULT_ENABLE_ASSET_ADMIN_ENV = 'JUMPSERVER_ENABLE_ASSET_ADMIN'
+
 /** Credential reference for Access Key ID. */
 export const DEFAULT_ACCESS_KEY_ID_ENV = 'JUMPSERVER_ACCESS_KEY_ID'
 
@@ -35,11 +41,9 @@ export interface Config {
 export type ResolvedConfig = Required<
   Pick<
     Config,
-    | 'orgId'
     | 'accessKeyIdEnv'
     | 'accessKeySecretEnv'
     | 'tlsRejectUnauthorized'
-    | 'enableAssetAdmin'
     | 'idleTimeoutMs'
     | 'execTimeoutMs'
     | 'outputMaxBytes'
