@@ -16,7 +16,7 @@ pnpm build
 dsh plugin --profile web add .
 
 # or from GitHub (pnpm >= 10 must allow the prepare/build script)
-dsh plugin --profile web add github:lettimepassby/jumpserver-dsh
+dsh plugin --profile web add github:jumpserver-east/jumpserver-dsh
 ```
 
 If a git install refuses `prepare`, copy the package key pnpm printed into the profile `pnpm-workspace.yaml`:
@@ -26,7 +26,7 @@ allowBuilds:
   dsh-jumpserver: true
 ```
 
-then re-run `dsh plugin add`. Pin a commit (`github:lettimepassby/jumpserver-dsh#<sha>`) so a later push cannot change what runs.
+then re-run `dsh plugin add`. Pin a commit (`github:jumpserver-east/jumpserver-dsh#<sha>`) so a later push cannot change what runs.
 
 Override config in the profile `cordis.patch.yml` if needed:
 
@@ -86,4 +86,4 @@ pnpm build
 
 ## License
 
-MIT. Author: lettimepassby.
+MIT.

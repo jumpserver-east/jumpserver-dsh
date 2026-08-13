@@ -6,12 +6,12 @@
   "author": "lettimepassby <86416409@qq.com>",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lettimepassby/jumpserver-dsh.git"
+    "url": "git+https://github.com/jumpserver-east/jumpserver-dsh.git"
   },
   "bugs": {
-    "url": "https://github.com/lettimepassby/jumpserver-dsh/issues"
+    "url": "https://github.com/jumpserver-east/jumpserver-dsh/issues"
   },
-  "homepage": "https://github.com/lettimepassby/jumpserver-dsh#readme",
+  "homepage": "https://github.com/jumpserver-east/jumpserver-dsh#readme",
   "keywords": [
     "dsh-plugin",
     "deepseek-harness",
