@@ -1,0 +1,5 @@
+# DeepSeek Harness bundle patch for dsh-jumpserver.
+# Users override this row in their profile cordis.patch.yml (last write wins per id).
+- insert:
+    - id: jumpserver
+      name: dsh-jumpserver
