@@ -42,20 +42,19 @@ Override config in the profile `cordis.patch.yml` if needed:
 
 ## Credentials
 
-Do not put secrets in `cordis.yml`. Use Harness credentials / environment variables:
+Do not put secrets in `cordis.yml`. Set these through Harness credentials or the process environment:
 
 | Variable | Purpose |
 |---|---|
 | `JUMPSERVER_URL` | Core URL, for example `https://jms.example.com` |
-| `JUMPSERVER_ORG_ID` | Organization UUID (`X-JMS-ORG`). Default org is `00000000-0000-0000-0000-000000000002` |
-| `JUMPSERVER_ACCESS_KEY_ID` | Access Key ID (preferred) |
+| `JUMPSERVER_ACCESS_KEY_ID` | Access Key ID |
 | `JUMPSERVER_ACCESS_KEY_SECRET` | Access Key secret |
-| `JUMPSERVER_TOKEN` | Private Token or Bearer token when `authMode` is `private-token` / `bearer` |
-| `JUMPSERVER_KOKO_HOST` / `JUMPSERVER_KOKO_PORT` | Optional KoKo SSH override |
 
-Create an Access Key in JumpServer personal settings. The running Harness host must be able to reach both Core (`https`) and KoKo SSH (default port `2222`).
+Create an Access Key in JumpServer personal settings. KoKo SSH host and port come from the connection-token `client-url` response; do not configure them separately. The running Harness host must reach both Core (`https`) and KoKo SSH.
 
 Copy `.env.example` and load those names through Harness credentials (or the process environment).
+
+Multi-organization deployments can set `orgId` in the profile patch (default is JumpServer's Default org).
 
 ## Tools
 

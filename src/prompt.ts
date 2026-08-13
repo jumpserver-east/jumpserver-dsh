@@ -1,5 +1,4 @@
 import type { Context } from '@deepseek-ai/cordis'
-import type { ResolvedConfig } from './config.js'
 
 /** Tool-guidance section so the model prefers JumpServer over direct SSH. */
 export const JUMPSERVER_PROMPT = `JumpServer tools (jms_*):
@@ -10,7 +9,7 @@ export const JUMPSERVER_PROMPT = `JumpServer tools (jms_*):
 - Admin tools (create/update/delete host) only exist when enableAssetAdmin is on, and they still do not grant a backdoor around KoKo.`
 
 /** Register a system-prompt section when the seam is present. */
-export function registerPrompt(ctx: Context, _config: ResolvedConfig): void {
+export function registerPrompt(ctx: Context): void {
   const systemPrompt = ctx.get('systemPrompt')
   systemPrompt?.section({
     name: 'jumpserver',

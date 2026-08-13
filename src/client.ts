@@ -184,17 +184,13 @@ function authorizationHeader(
   path: string,
   signedHeaders: { accept: string; date: string },
 ): string {
-  if (auth.mode === 'access-key') {
-    return signAccessKey({
-      keyId: auth.accessKeyId,
-      secret: auth.accessKeySecret,
-      method,
-      path,
-      headers: signedHeaders,
-    })
-  }
-  if (auth.mode === 'bearer') return `Bearer ${auth.token}`
-  return `Token ${auth.token}`
+  return signAccessKey({
+    keyId: auth.accessKeyId,
+    secret: auth.accessKeySecret,
+    method,
+    path,
+    headers: signedHeaders,
+  })
 }
 
 function parseBody(text: string): unknown {

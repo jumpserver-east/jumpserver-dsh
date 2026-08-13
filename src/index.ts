@@ -14,7 +14,6 @@ import {
   DEFAULT_ACCESS_KEY_ID_ENV,
   DEFAULT_ACCESS_KEY_SECRET_ENV,
   DEFAULT_ORG_ID,
-  DEFAULT_TOKEN_ENV,
   type Config as PluginConfig,
   type ResolvedConfig,
 } from './config.js'
@@ -32,14 +31,8 @@ export type Config = PluginConfig
 export const Config: z<PluginConfig> = z.object({
   baseUrl: z.string(),
   orgId: z.string().default(DEFAULT_ORG_ID),
-  authMode: z.union(['access-key', 'private-token', 'bearer']).default('access-key'),
   accessKeyIdEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_ID_ENV),
   accessKeySecretEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_SECRET_ENV),
-  tokenEnv: z.string().role('credential-ref').default(DEFAULT_TOKEN_ENV),
-  kokoHost: z.string(),
-  kokoPort: z.number().step(1).min(1).max(65535),
-  connectMethod: z.string().default('ssh'),
-  protocol: z.string().default('ssh'),
   tlsRejectUnauthorized: z.boolean().default(true),
   enableAssetAdmin: z.boolean().default(false),
   idleTimeoutMs: z.number().step(1).min(1_000).default(600_000),
@@ -50,11 +43,7 @@ export const Config: z<PluginConfig> = z.object({
 
 /** Mount JumpServer tools, prompt guidance, and KoKo session cleanup. */
 export function apply(ctx: Context, config: PluginConfig): void {
-  const resolved = {
-    ...(config as ResolvedConfig),
-    kokoHost: config.kokoHost?.trim() || process.env.JUMPSERVER_KOKO_HOST?.trim(),
-    kokoPort: config.kokoPort ?? parsePort(process.env.JUMPSERVER_KOKO_PORT),
-  }
+  const resolved = config as ResolvedConfig
   const client = new JumpServerClient({
     baseUrl: () => resolveBaseUrl(resolved),
     orgId: resolved.orgId,
@@ -73,16 +62,10 @@ export function apply(ctx: Context, config: PluginConfig): void {
     void sessions.disposeAll()
   })
 
-  registerPrompt(ctx, resolved)
+  registerPrompt(ctx)
   registerCatalogTools(ctx, api)
   registerRuntimeTools(ctx, api, sessions, resolved)
   if (resolved.enableAssetAdmin) registerAdminTools(ctx, api)
-}
-
-function parsePort(value: string | undefined): number | undefined {
-  if (!value) return undefined
-  const port = Number(value)
-  return Number.isInteger(port) && port > 0 && port <= 65535 ? port : undefined
 }
 
 export { JumpServerApi } from './api.js'

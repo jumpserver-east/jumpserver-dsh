@@ -11,11 +11,11 @@ export class JumpServerError extends Error {
   }
 }
 
-/** Credentials resolved for one Core API call. */
-export type ResolvedAuth =
-  | { mode: 'access-key'; accessKeyId: string; accessKeySecret: string }
-  | { mode: 'private-token'; token: string }
-  | { mode: 'bearer'; token: string }
+/** Access Key resolved for one Core API call. */
+export interface ResolvedAuth {
+  accessKeyId: string
+  accessKeySecret: string
+}
 
 /** One page of a JumpServer list endpoint. */
 export interface ListPage<T> {

@@ -24,7 +24,6 @@ describe('JumpServerClient', () => {
       tlsRejectUnauthorized: true,
       now: () => new Date('1994-11-15T08:12:31.000Z'),
       auth: async () => ({
-        mode: 'access-key',
         accessKeyId: 'kid',
         accessKeySecret: 'secret',
       }),
@@ -47,28 +46,12 @@ describe('JumpServerClient', () => {
     expect(headers.get('Authorization')).toMatch(/^Signature keyId="kid",algorithm="hmac-sha256"/)
   })
 
-  it('uses Token authorization for private-token mode', async () => {
-    let authorization = ''
-    const client = new JumpServerClient({
-      baseUrl: 'https://jms.example.com',
-      orgId: 'org',
-      tlsRejectUnauthorized: true,
-      auth: async () => ({ mode: 'private-token', token: 'abc' }),
-      fetchImpl: async (_url, init) => {
-        authorization = new Headers(init.headers).get('Authorization') ?? ''
-        return new Response('{}', { status: 200 })
-      },
-    })
-    await client.get('/api/v1/users/profile/')
-    expect(authorization).toBe('Token abc')
-  })
-
   it('throws JumpServerError with status on 403', async () => {
     const client = new JumpServerClient({
       baseUrl: 'https://jms.example.com',
       orgId: 'org',
       tlsRejectUnauthorized: true,
-      auth: async () => ({ mode: 'bearer', token: 't' }),
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
       fetchImpl: async () => new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 }),
     })
     await expect(client.get('/api/v1/assets/hosts/')).rejects.toMatchObject({
@@ -82,7 +65,7 @@ describe('JumpServerClient', () => {
       baseUrl: 'https://jms.example.com',
       orgId: 'org',
       tlsRejectUnauthorized: true,
-      auth: async () => ({ mode: 'bearer', token: 't' }),
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
       fetchImpl: async () => new Response(JSON.stringify({ detail: 'not found' }), { status: 404 }),
     })
     await expect(client.getOrUndefined('/api/v1/missing/')).resolves.toBeUndefined()

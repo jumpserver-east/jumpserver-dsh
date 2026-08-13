@@ -4,30 +4,18 @@ import type { ResolvedConfig } from './config.js'
 import { JumpServerError, type ResolvedAuth } from './types.js'
 
 /**
- * Resolve JumpServer credentials for one Core API call.
+ * Resolve JumpServer Access Key credentials for one Core API call.
  * Prefers `ctx.credentials`, then the process environment.
  */
 export async function resolveAuth(ctx: Context, config: ResolvedConfig): Promise<ResolvedAuth> {
-  if (config.authMode === 'access-key') {
-    const accessKeyId = await readSecret(ctx, config.accessKeyIdEnv)
-    const accessKeySecret = await readSecret(ctx, config.accessKeySecretEnv)
-    if (!accessKeyId || !accessKeySecret) {
-      throw new JumpServerError(
-        `JumpServer Access Key is not configured. Set ${config.accessKeyIdEnv} and ${config.accessKeySecretEnv}.`,
-      )
-    }
-    return { mode: 'access-key', accessKeyId, accessKeySecret }
-  }
-
-  const token = await readSecret(ctx, config.tokenEnv)
-  if (!token) {
+  const accessKeyId = await readSecret(ctx, config.accessKeyIdEnv)
+  const accessKeySecret = await readSecret(ctx, config.accessKeySecretEnv)
+  if (!accessKeyId || !accessKeySecret) {
     throw new JumpServerError(
-      `JumpServer token is not configured. Set ${config.tokenEnv} for authMode=${config.authMode}.`,
+      `JumpServer Access Key is not configured. Set ${config.accessKeyIdEnv} and ${config.accessKeySecretEnv}.`,
     )
   }
-  return config.authMode === 'bearer'
-    ? { mode: 'bearer', token }
-    : { mode: 'private-token', token }
+  return { accessKeyId, accessKeySecret }
 }
 
 /** Read one credential reference without ever logging the value. */
