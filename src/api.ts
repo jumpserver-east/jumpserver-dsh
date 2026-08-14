@@ -176,6 +176,15 @@ export class JumpServerApi {
     return parseClientUrlPayload(body, fallback)
   }
 
+  /** Best-effort expire so a retried connect_method does not leave a live token. */
+  async expireConnectionToken(tokenId: string): Promise<void> {
+    try {
+      await this.client.patch(`/api/v1/authentication/connection-token/${tokenId}/expire/`, {})
+    } catch {
+      // Token may already be gone; do not mask the original connect error.
+    }
+  }
+
   /**
    * Create a token with a native KoKo connect_method and resolve client-url.
    * Retries ssh_guide if ssh_client is rejected.
@@ -189,18 +198,25 @@ export class JumpServerApi {
   }, signal?: AbortSignal): Promise<{ token: ConnectionTokenInfo; client: ClientProtocolData }> {
     const methods = nativeConnectMethods(input.protocol)
     let lastError: unknown
-    for (const [index, connectMethod] of methods.entries()) {
-      try {
-        const token = await this.createConnectionToken({ ...input, connectMethod }, signal)
-        const client = await this.getClientProtocol(token.id, signal, token)
-        return { token, client }
-      } catch (error) {
-        lastError = error
-        const canRetry = isUnsupportedConnectMethod(error) && index < methods.length - 1
-        if (!canRetry) throw error
+    const leftoverIds: string[] = []
+    try {
+      for (const [index, connectMethod] of methods.entries()) {
+        try {
+          const token = await this.createConnectionToken({ ...input, connectMethod }, signal)
+          leftoverIds.push(token.id)
+          const client = await this.getClientProtocol(token.id, signal, token)
+          leftoverIds.pop()
+          return { token, client }
+        } catch (error) {
+          lastError = error
+          const canRetry = isUnsupportedConnectMethod(error) && index < methods.length - 1
+          if (!canRetry) throw error
+        }
       }
+      throw lastError
+    } finally {
+      await Promise.all(leftoverIds.map(id => this.expireConnectionToken(id)))
     }
-    throw lastError
   }
 }
 

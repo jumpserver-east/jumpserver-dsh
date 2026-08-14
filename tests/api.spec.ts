@@ -95,4 +95,38 @@ describe('createClientProtocol', () => {
     })
     expect(result.client.token).toEqual({ id: 'tok-1', value: 'from-create' })
   })
+
+  it('expires the first token when retrying ssh_guide', async () => {
+    const calls: Array<{ method: string; url: string }> = []
+    let posts = 0
+    const url = encodeJms({
+      token: { id: 'tok-2', value: 'secret' },
+      endpoint: { host: 'koko.example.com', port: 2222 },
+    })
+    const api = apiWith((href, init) => {
+      const method = (init.method ?? 'GET').toUpperCase()
+      calls.push({ method, url: href })
+      if (method === 'POST' && href.endsWith('/authentication/connection-token/')) {
+        posts += 1
+        return new Response(JSON.stringify({ id: `tok-${posts}`, protocol: 'ssh' }), { status: 201 })
+      }
+      if (href.includes('/tok-1/client-url/')) {
+        return new Response(JSON.stringify({ error: 'Connect method not support: ssh_client' }), { status: 400 })
+      }
+      if (href.includes('/tok-2/client-url/')) {
+        return new Response(JSON.stringify({ url }), { status: 200 })
+      }
+      if (method === 'PATCH' && href.includes('/tok-1/expire/')) {
+        return new Response('', { status: 200 })
+      }
+      return new Response('nope', { status: 404 })
+    })
+    const result = await api.createClientProtocol({
+      asset: 'asset-1',
+      account: 'root',
+      protocol: 'ssh',
+    })
+    expect(result.token.id).toBe('tok-2')
+    expect(calls.some(call => call.method === 'PATCH' && call.url.includes('/tok-1/expire/'))).toBe(true)
+  })
 })
