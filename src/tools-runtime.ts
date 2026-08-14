@@ -3,6 +3,8 @@ import type { JsonValue } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JumpServerApi } from './api.js'
 import type { ResolvedConfig } from './config.js'
+import { resolveBaseUrl } from './credentials.js'
+import { resolveKokoEndpoint } from './koko-endpoint.js'
 import { jsonOutput } from './render.js'
 import type { SessionManager } from './sessions.js'
 
@@ -43,8 +45,7 @@ export function registerRuntimeTools(
         protocol,
         inputUsername: args.input_username,
       }, exec.signal)
-      const host = client.endpoint.host
-      const port = client.endpoint.port
+      const { host, port } = resolveKokoEndpoint(client.endpoint, resolveBaseUrl(config))
       const info = await sessions.open({
         host,
         port,
