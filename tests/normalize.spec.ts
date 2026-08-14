@@ -44,4 +44,15 @@ describe('parseJmsUrl', () => {
       value: 'from-create',
     })
   })
+
+  it('ignores a string token field and reads id/value from the payload', () => {
+    const payload = {
+      token: 'tok-1',
+      id: 'tok-1',
+      value: 'secret',
+      endpoint: { host: 'koko.example.com', port: 2222 },
+    }
+    const encoded = `jms://${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')}`
+    expect(parseJmsUrl(encoded).token).toEqual({ id: 'tok-1', value: 'secret' })
+  })
 })
