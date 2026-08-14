@@ -1,6 +1,10 @@
+import { createRequire } from 'node:module'
 import { httpDate, signAccessKey } from './auth.js'
 import { formatNetworkError } from './errors.js'
 import { JumpServerError, type ResolvedAuth } from './types.js'
+
+const require = createRequire(import.meta.url)
+const PACKAGE_VERSION = (require('../package.json') as { version: string }).version
 
 /** Optional fetch used by tests. */
 export type FetchLike = (url: string, init: RequestInit) => Promise<Response>
@@ -235,7 +239,7 @@ function requestUserAgent(): string {
     : process.platform === 'win32'
       ? 'Windows NT 10.0'
       : 'Linux x86_64'
-  return `dsh-jumpserver/0.1.0 (${platform})`
+  return `dsh-jumpserver/${PACKAGE_VERSION} (${platform})`
 }
 
 async function createInsecureFetch(): Promise<FetchLike> {
