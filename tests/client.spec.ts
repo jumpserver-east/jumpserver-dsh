@@ -101,6 +101,17 @@ describe('JumpServerClient', () => {
     }
   })
 
+  it('includes raw response text when JSON has no message field', async () => {
+    const client = new JumpServerClient({
+      baseUrl: 'https://jms.example.com',
+      orgId: 'org',
+      tlsRejectUnauthorized: true,
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
+      fetchImpl: async () => new Response('null', { status: 502 }),
+    })
+    await expect(client.get('/api/v1/users/profile/')).rejects.toThrow(/null/)
+  })
+
   it('returns undefined from getOrUndefined on 404', async () => {
     const client = new JumpServerClient({
       baseUrl: 'https://jms.example.com',

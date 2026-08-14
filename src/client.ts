@@ -82,12 +82,12 @@ export class JumpServerClient {
 
   /** Perform a JSON API call and throw on unexpected HTTP errors. */
   async request<T = unknown>(spec: ClientRequest): Promise<T> {
-    const { status, body, path } = await this.requestRaw(spec)
+    const { status, body, path, text } = await this.requestRaw(spec)
     if (status === 204) return undefined as T
     const allowed = spec.allowStatuses ?? []
     if (status >= 400 && !allowed.includes(status)) {
       throw new JumpServerError(
-        `JumpServer ${spec.method.toUpperCase()} ${path} failed (${status}): ${formatError(body, '')}`,
+        `JumpServer ${spec.method.toUpperCase()} ${path} failed (${status}): ${formatError(body, text)}`,
         status,
         body,
       )
@@ -96,7 +96,7 @@ export class JumpServerClient {
   }
 
   /** Perform a JSON API call and return status + body. */
-  async requestRaw(spec: ClientRequest): Promise<{ status: number; body: unknown; path: string }> {
+  async requestRaw(spec: ClientRequest): Promise<{ status: number; body: unknown; path: string; text: string }> {
     const url = buildRequestUrl(this.resolveBaseUrl(), spec.path, spec.query)
     const method = spec.method.toUpperCase()
     const date = httpDate(this.now())
@@ -138,6 +138,7 @@ export class JumpServerClient {
       status: response.status,
       body: text.length === 0 ? undefined : parseBody(text),
       path: signingPath(url),
+      text,
     }
   }
 
@@ -167,11 +168,11 @@ export class JumpServerClient {
     query?: Record<string, string | number | boolean | undefined>,
     signal?: AbortSignal,
   ): Promise<T | undefined> {
-    const { status, body, path: signedPath } = await this.requestRaw({ method: 'GET', path, query, signal })
+    const { status, body, path: signedPath, text } = await this.requestRaw({ method: 'GET', path, query, signal })
     if (status === 404) return undefined
     if (status >= 400) {
       throw new JumpServerError(
-        `JumpServer GET ${signedPath} failed (${status}): ${formatError(body, '')}`,
+        `JumpServer GET ${signedPath} failed (${status}): ${formatError(body, text)}`,
         status,
         body,
       )
