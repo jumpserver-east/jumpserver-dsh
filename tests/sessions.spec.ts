@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeUtf8Prefix, SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
+import { decodeUtf8Captured, decodeUtf8Prefix, SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
 import { JumpServerError } from '../src/types.js'
 
 function fakeConnection(): SshConnection & { ended: boolean; commands: string[]; fireClose: () => void } {
@@ -121,6 +121,20 @@ describe('decodeUtf8Prefix', () => {
     const ni = Buffer.from('你', 'utf8')
     expect(decodeUtf8Prefix(ni.subarray(0, 2))).toBe('')
     expect(decodeUtf8Prefix(Buffer.concat([ni, ni.subarray(0, 1)]))).toBe('你')
+  })
+})
+
+describe('decodeUtf8Captured', () => {
+  it('keeps replacement characters when the buffer was not truncated', () => {
+    const invalid = Buffer.from([0x41, 0x80])
+    expect(decodeUtf8Captured(invalid, false)).toBe('A\uFFFD')
+  })
+
+  it('clips an incomplete trailing code point only when truncated', () => {
+    const ni = Buffer.from('你', 'utf8')
+    const cut = Buffer.concat([ni, ni.subarray(0, 1)])
+    expect(decodeUtf8Captured(cut, true)).toBe('你')
+    expect(decodeUtf8Captured(cut, false).endsWith('\uFFFD')).toBe(true)
   })
 })
 

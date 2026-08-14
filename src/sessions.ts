@@ -384,7 +384,7 @@ export class Ssh2Connection implements SshConnection {
       stream.on('error', (streamError: Error) => finish(streamError))
       stream.on('close', () => {
         const buf = Buffer.concat(chunks, size)
-        const decoded = decodeBuffer(buf)
+        const decoded = decodeBuffer(buf, truncated)
         finish(undefined, {
           path: remotePath,
           content: decoded.content,
@@ -492,8 +492,13 @@ class CappedBuffer {
   }
 
   toString(): string {
-    return decodeUtf8Prefix(Buffer.concat(this.chunks, this.size))
+    return decodeUtf8Captured(Buffer.concat(this.chunks, this.size), this.truncated)
   }
+}
+
+/** Decode bytes; only clip a trailing incomplete code point when the buffer was cut. */
+export function decodeUtf8Captured(buf: Buffer, truncated: boolean): string {
+  return truncated ? decodeUtf8Prefix(buf) : buf.toString('utf8')
 }
 
 /** Decode a byte prefix without emitting a replacement char for a cut code point. */
@@ -523,9 +528,9 @@ function utf8SafeEnd(buf: Buffer): number {
   return buf.length
 }
 
-function decodeBuffer(buf: Buffer): { content: string; encoding: 'utf8' | 'base64' } {
+function decodeBuffer(buf: Buffer, truncated: boolean): { content: string; encoding: 'utf8' | 'base64' } {
   if (buf.includes(0)) {
     return { content: buf.toString('base64'), encoding: 'base64' }
   }
-  return { content: decodeUtf8Prefix(buf), encoding: 'utf8' }
+  return { content: decodeUtf8Captured(buf, truncated), encoding: 'utf8' }
 }
