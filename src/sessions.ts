@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Client } from 'ssh2'
+import { Client, type SFTPWrapper } from 'ssh2'
 import { JumpServerError } from './types.js'
 
 /** Result of one remote command. */
@@ -216,7 +216,34 @@ function openClient(input: OpenSessionInput, signal?: AbortSignal): Promise<Clie
 }
 
 class Ssh2Connection implements SshConnection {
-  constructor(private readonly client: Client) {}
+  private sftpSession?: Promise<SFTPWrapper>
+  private closed = false
+
+  constructor(private readonly client: Client) {
+    this.client.on('close', () => {
+      this.closed = true
+      this.sftpSession = undefined
+    })
+  }
+
+  private getSftp(): Promise<SFTPWrapper> {
+    if (!this.sftpSession) {
+      this.sftpSession = new Promise((resolve, reject) => {
+        this.client.sftp((error, sftp) => {
+          if (error) {
+            this.sftpSession = undefined
+            reject(error)
+            return
+          }
+          sftp.on('close', () => {
+            this.sftpSession = undefined
+          })
+          resolve(sftp)
+        })
+      })
+    }
+    return this.sftpSession
+  }
 
   exec(command: string, opts: { signal?: AbortSignal; timeoutMs: number; maxBytes: number }): Promise<ExecResult> {
     return new Promise((resolve, reject) => {
@@ -266,64 +293,75 @@ class Ssh2Connection implements SshConnection {
     })
   }
 
-  readFile(remotePath: string, maxBytes: number): Promise<FileReadResult> {
+  async readFile(remotePath: string, maxBytes: number): Promise<FileReadResult> {
+    const sftp = await this.getSftp()
     return new Promise((resolve, reject) => {
-      this.client.sftp((error, sftp) => {
-        if (error) {
-          reject(error)
+      let settled = false
+      const finish = (error?: Error, value?: FileReadResult) => {
+        if (settled) return
+        settled = true
+        if (error) reject(error)
+        else resolve(value as FileReadResult)
+      }
+      const chunks: Buffer[] = []
+      let size = 0
+      let truncated = false
+      const stream = sftp.createReadStream(remotePath)
+      stream.on('data', (chunk: Buffer) => {
+        if (size >= maxBytes) {
+          truncated = true
+          stream.destroy()
           return
         }
-        const chunks: Buffer[] = []
-        let size = 0
-        let truncated = false
-        const stream = sftp.createReadStream(remotePath)
-        stream.on('data', (chunk: Buffer) => {
-          if (size >= maxBytes) {
-            truncated = true
-            stream.destroy()
-            return
-          }
-          const room = maxBytes - size
-          const piece = chunk.length > room ? chunk.subarray(0, room) : chunk
-          chunks.push(piece)
-          size += piece.length
-          if (chunk.length > room) {
-            truncated = true
-            stream.destroy()
-          }
-        })
-        stream.on('error', reject)
-        stream.on('close', () => {
-          const buf = Buffer.concat(chunks, size)
-          const decoded = decodeBuffer(buf)
-          resolve({
-            path: remotePath,
-            content: decoded.content,
-            encoding: decoded.encoding,
-            truncated,
-            byteLength: buf.byteLength,
-          })
+        const room = maxBytes - size
+        const piece = chunk.length > room ? chunk.subarray(0, room) : chunk
+        chunks.push(piece)
+        size += piece.length
+        if (chunk.length > room) {
+          truncated = true
+          stream.destroy()
+        }
+      })
+      stream.on('error', (streamError: Error) => finish(streamError))
+      stream.on('close', () => {
+        const buf = Buffer.concat(chunks, size)
+        const decoded = decodeBuffer(buf)
+        finish(undefined, {
+          path: remotePath,
+          content: decoded.content,
+          encoding: decoded.encoding,
+          truncated,
+          byteLength: buf.byteLength,
         })
       })
     })
   }
 
-  writeFile(remotePath: string, data: Buffer): Promise<void> {
+  async writeFile(remotePath: string, data: Buffer): Promise<void> {
+    const sftp = await this.getSftp()
     return new Promise((resolve, reject) => {
-      this.client.sftp((error, sftp) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        const stream = sftp.createWriteStream(remotePath)
-        stream.on('error', reject)
-        stream.on('close', () => resolve())
-        stream.end(data)
-      })
+      let settled = false
+      const finish = (error?: Error) => {
+        if (settled) return
+        settled = true
+        if (error) reject(error)
+        else resolve()
+      }
+      const stream = sftp.createWriteStream(remotePath)
+      stream.on('error', (streamError: Error) => finish(streamError))
+      stream.on('close', () => finish())
+      stream.end(data)
     })
   }
 
-  end(): Promise<void> {
+  async end(): Promise<void> {
+    const sftp = await this.sftpSession?.catch(() => undefined)
+    try {
+      sftp?.end()
+    } catch {
+      // Channel may already be gone.
+    }
+    this.sftpSession = undefined
     return new Promise((resolve) => {
       this.client.on('close', () => resolve())
       this.client.end()
