@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
 import { JumpServerError } from '../src/types.js'
 
-function fakeConnection(): SshConnection & { ended: boolean; commands: string[] } {
+function fakeConnection(): SshConnection & { ended: boolean; commands: string[]; fireClose: () => void } {
   const commands: string[] = []
+  const closeListeners: Array<() => void> = []
   return {
     commands,
     ended: false,
@@ -17,6 +18,12 @@ function fakeConnection(): SshConnection & { ended: boolean; commands: string[] 
     async writeFile() {},
     async end() {
       this.ended = true
+    },
+    onClose(cb) {
+      closeListeners.push(cb)
+    },
+    fireClose() {
+      for (const listener of closeListeners) listener()
     },
   }
 }
@@ -54,6 +61,25 @@ describe('SessionManager', () => {
       connect: async () => fakeConnection(),
     })
     await expect(manager.exec('missing', 'true')).rejects.toBeInstanceOf(JumpServerError)
+  })
+
+  it('drops a session when the SSH connection closes', async () => {
+    const conn = fakeConnection()
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => conn,
+    })
+    const info = await manager.open(input())
+    expect(manager.list()).toHaveLength(1)
+    conn.fireClose()
+    expect(manager.list()).toHaveLength(0)
+    await expect(manager.disconnect(info.session_id)).resolves.toEqual({
+      closed: false,
+      session_id: info.session_id,
+    })
   })
 
   it('rejects oversized writes', async () => {

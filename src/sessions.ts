@@ -49,6 +49,7 @@ export interface SshConnection {
   readFile(remotePath: string, maxBytes: number): Promise<FileReadResult>
   writeFile(remotePath: string, data: Buffer): Promise<void>
   end(): Promise<void>
+  onClose(cb: () => void): void
 }
 
 /** Session manager options. */
@@ -98,6 +99,12 @@ export class SessionManager {
     }
     live.timer.unref?.()
     this.sessions.set(info.session_id, live)
+    connection.onClose(() => {
+      const current = this.sessions.get(info.session_id)
+      if (!current) return
+      this.sessions.delete(info.session_id)
+      clearTimeout(current.timer)
+    })
     return info
   }
 
@@ -215,15 +222,27 @@ function openClient(input: OpenSessionInput, signal?: AbortSignal): Promise<Clie
   })
 }
 
+const SSH_END_TIMEOUT_MS = 3_000
+
 class Ssh2Connection implements SshConnection {
   private sftpSession?: Promise<SFTPWrapper>
   private closed = false
+  private readonly closeListeners: Array<() => void> = []
 
   constructor(private readonly client: Client) {
     this.client.on('close', () => {
       this.closed = true
       this.sftpSession = undefined
+      for (const listener of this.closeListeners) listener()
     })
+  }
+
+  onClose(cb: () => void): void {
+    if (this.closed) {
+      cb()
+      return
+    }
+    this.closeListeners.push(cb)
   }
 
   private getSftp(): Promise<SFTPWrapper> {
@@ -362,8 +381,22 @@ class Ssh2Connection implements SshConnection {
       // Channel may already be gone.
     }
     this.sftpSession = undefined
-    return new Promise((resolve) => {
-      this.client.on('close', () => resolve())
+    if (this.closed) return
+    await new Promise<void>((resolve) => {
+      const done = () => {
+        clearTimeout(timer)
+        resolve()
+      }
+      const timer = setTimeout(() => {
+        try {
+          this.client.destroy()
+        } catch {
+          // Ignore a second teardown.
+        }
+        this.closed = true
+        resolve()
+      }, SSH_END_TIMEOUT_MS)
+      this.client.once('close', done)
       this.client.end()
     })
   }
