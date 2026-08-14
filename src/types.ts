@@ -51,7 +51,7 @@ export interface AccountSummary {
 /** Connection token fields needed to open KoKo SSH. */
 export interface ConnectionTokenInfo {
   id: string
-  value: string
+  value?: string
   protocol: string
   asset?: string
   account?: string

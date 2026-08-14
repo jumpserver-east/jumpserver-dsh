@@ -139,13 +139,13 @@ export class JumpServerApi {
     }, signal)
     const row = asRecord(body)
     const id = String(row.id ?? '')
-    const value = String(row.value ?? '')
-    if (!id || !value) {
-      throw new JumpServerError('connection-token response missing id/value', undefined, body)
+    if (!id) {
+      throw new JumpServerError('connection-token response missing id', undefined, body)
     }
+    const value = typeof row.value === 'string' && row.value.length > 0 ? row.value : undefined
     return {
       id,
-      value,
+      ...(value ? { value } : {}),
       protocol: String(row.protocol ?? input.protocol),
       ...(typeof row.asset === 'string' ? { asset: row.asset } : {}),
       ...(typeof row.account === 'string' ? { account: row.account } : {}),
