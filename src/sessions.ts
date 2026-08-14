@@ -527,5 +527,5 @@ function decodeBuffer(buf: Buffer): { content: string; encoding: 'utf8' | 'base6
   if (buf.includes(0)) {
     return { content: buf.toString('base64'), encoding: 'base64' }
   }
-  return { content: buf.toString('utf8'), encoding: 'utf8' }
+  return { content: decodeUtf8Prefix(buf), encoding: 'utf8' }
 }
