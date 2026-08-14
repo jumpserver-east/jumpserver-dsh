@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Client, type SFTPWrapper } from 'ssh2'
+import { formatNetworkError } from './errors.js'
 import { JumpServerError } from './types.js'
 
 /** Result of one remote command. */
@@ -210,7 +211,9 @@ function openClient(input: OpenSessionInput, signal?: AbortSignal): Promise<Clie
     }
     signal?.addEventListener('abort', onAbort, { once: true })
     client.on('ready', () => finish(undefined, client))
-    client.on('error', (error) => finish(error instanceof Error ? error : new Error(String(error))))
+    client.on('error', (error) => finish(new JumpServerError(
+      `SSH connect ${input.host}:${input.port} failed: ${formatNetworkError(error)}`,
+    )))
     client.connect({
       host: input.host,
       port: input.port,

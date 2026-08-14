@@ -1,4 +1,5 @@
 import { httpDate, signAccessKey } from './auth.js'
+import { formatNetworkError } from './errors.js'
 import { JumpServerError, type ResolvedAuth } from './types.js'
 
 /** Optional fetch used by tests. */
@@ -118,12 +119,19 @@ export class JumpServerClient {
     })
 
     const fetchImpl = await this.fetcher()
-    const response = await fetchImpl(url.toString(), {
-      method,
-      headers,
-      body,
-      signal: spec.signal,
-    })
+    let response: Response
+    try {
+      response = await fetchImpl(url.toString(), {
+        method,
+        headers,
+        body,
+        signal: spec.signal,
+      })
+    } catch (error) {
+      throw new JumpServerError(
+        `JumpServer ${method} ${signingPath(url)} failed: ${formatNetworkError(error)}`,
+      )
+    }
 
     const text = response.status === 204 ? '' : await response.text()
     return {
