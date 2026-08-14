@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { Server, utils, type Client } from 'ssh2'
 import { connectSsh2, Ssh2Connection, type SshConnection } from '../src/sessions.js'
 
+const { OPEN_MODE, STATUS_CODE } = utils.sftp
 const hostKey = utils.generateKeyPairSync('ed25519').private
 
 describe('Ssh2Connection.getSftp', () => {
@@ -112,6 +113,19 @@ describe('Ssh2Connection.exec exit code', () => {
     expect(result.stderr).toBe('late')
     expect(result.exitCode).toBe(0)
   })
+
+  it('reads and writes files over a reused SFTP channel', async () => {
+    const files = new Map<string, Buffer>([['/tmp/hello.txt', Buffer.from('hello-sftp')]])
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('sftp', (accept) => attachMemorySftp(accept(), files))
+    })
+    const read = await conn.readFile('/tmp/hello.txt', 4_096)
+    expect(read.content).toBe('hello-sftp')
+    await conn.writeFile('/tmp/out.txt', Buffer.from('written'))
+    expect(files.get('/tmp/out.txt')?.toString()).toBe('written')
+    const again = await conn.readFile('/tmp/hello.txt', 4_096)
+    expect(again.content).toBe('hello-sftp')
+  })
 })
 
 function fakeClient(sftp: Client['sftp']): Client {
@@ -175,5 +189,78 @@ function listen(server: Server): Promise<number> {
 function closeServer(server: Server): Promise<void> {
   return new Promise((resolve) => {
     server.close(() => resolve())
+  })
+}
+
+function attachMemorySftp(
+  sftp: import('ssh2').SFTPWrapper & {
+    handle(reqid: number, handle: Buffer): void
+    status(reqid: number, code: number): void
+    data(reqid: number, data: Buffer): void
+    attrs(reqid: number, attrs: object): void
+    name(reqid: number, names: object[]): void
+  },
+  files: Map<string, Buffer>,
+): void {
+  const handles = new Map<number, { path: string; chunks?: Buffer[] }>()
+  let next = 1
+  sftp.on('OPEN', (reqid, filename, flags) => {
+    const id = next
+    next += 1
+    const handle = Buffer.alloc(4)
+    handle.writeUInt32BE(id, 0)
+    handles.set(id, {
+      path: filename,
+      chunks: flags & OPEN_MODE.WRITE ? [] : undefined,
+    })
+    sftp.handle(reqid, handle)
+  })
+  sftp.on('READ', (reqid, handle, offset, length) => {
+    const rec = handles.get(handle.readUInt32BE(0))
+    const data = rec ? files.get(rec.path) : undefined
+    if (!data || offset >= data.length) {
+      sftp.status(reqid, STATUS_CODE.EOF)
+      return
+    }
+    sftp.data(reqid, data.subarray(offset, offset + length))
+  })
+  sftp.on('WRITE', (reqid, handle, _offset, data) => {
+    const rec = handles.get(handle.readUInt32BE(0))
+    if (!rec?.chunks) {
+      sftp.status(reqid, STATUS_CODE.FAILURE)
+      return
+    }
+    rec.chunks.push(data)
+    sftp.status(reqid, STATUS_CODE.OK)
+  })
+  sftp.on('CLOSE', (reqid, handle) => {
+    const rec = handles.get(handle.readUInt32BE(0))
+    if (rec?.chunks) files.set(rec.path, Buffer.concat(rec.chunks))
+    handles.delete(handle.readUInt32BE(0))
+    sftp.status(reqid, STATUS_CODE.OK)
+  })
+  const onStat = (reqid: number, path: string) => {
+    const data = files.get(path)
+    if (!data) {
+      sftp.status(reqid, STATUS_CODE.NO_SUCH_FILE)
+      return
+    }
+    sftp.attrs(reqid, {
+      mode: 0o100644,
+      uid: 0,
+      gid: 0,
+      size: data.length,
+      atime: 0,
+      mtime: 0,
+    })
+  }
+  sftp.on('STAT', onStat)
+  sftp.on('LSTAT', onStat)
+  sftp.on('FSTAT', (reqid, handle) => {
+    const rec = handles.get(handle.readUInt32BE(0))
+    onStat(reqid, rec?.path ?? '')
+  })
+  sftp.on('REALPATH', (reqid, path) => {
+    sftp.name(reqid, [{ filename: path, longname: path, attrs: {} }])
   })
 }
