@@ -1,6 +1,12 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { DEFAULT_ENABLE_ASSET_ADMIN_ENV, DEFAULT_ORG_ID, DEFAULT_ORG_ID_ENV, type ResolvedConfig } from './config.js'
+import {
+  DEFAULT_ENABLE_ASSET_ADMIN_ENV,
+  DEFAULT_ENABLE_DB_WRITE_ENV,
+  DEFAULT_ORG_ID,
+  DEFAULT_ORG_ID_ENV,
+  type ResolvedConfig,
+} from './config.js'
 import { JumpServerError, type ResolvedAuth } from './types.js'
 
 /**
@@ -55,17 +61,23 @@ export function resolveOrgId(config: ResolvedConfig): string {
 /** Asset-admin tools: config wins, then JUMPSERVER_ENABLE_ASSET_ADMIN, then false. */
 export function resolveEnableAssetAdmin(config: ResolvedConfig): boolean {
   if (typeof config.enableAssetAdmin === 'boolean') return config.enableAssetAdmin
-  return parseEnvBoolean(process.env[DEFAULT_ENABLE_ASSET_ADMIN_ENV]) ?? false
+  return parseEnvBoolean(process.env[DEFAULT_ENABLE_ASSET_ADMIN_ENV], DEFAULT_ENABLE_ASSET_ADMIN_ENV) ?? false
+}
+
+/** Database writes: config wins, then JUMPSERVER_ENABLE_DB_WRITE, then false (query only). */
+export function resolveEnableDbWrite(config: ResolvedConfig): boolean {
+  if (typeof config.enableDbWrite === 'boolean') return config.enableDbWrite
+  return parseEnvBoolean(process.env[DEFAULT_ENABLE_DB_WRITE_ENV], DEFAULT_ENABLE_DB_WRITE_ENV) ?? false
 }
 
 /** Parse a .env boolean. Empty or unset is undefined so callers can apply their own default. */
-export function parseEnvBoolean(value: string | undefined): boolean | undefined {
+export function parseEnvBoolean(value: string | undefined, envName = DEFAULT_ENABLE_ASSET_ADMIN_ENV): boolean | undefined {
   if (value === undefined) return undefined
   const normalized = value.trim().toLowerCase()
   if (normalized.length === 0) return undefined
   if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true
   if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false
   throw new JumpServerError(
-    `${DEFAULT_ENABLE_ASSET_ADMIN_ENV} must be true or false, got ${JSON.stringify(value)}.`,
+    `${envName} must be true or false, got ${JSON.stringify(value)}.`,
   )
 }

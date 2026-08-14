@@ -52,6 +52,19 @@ describe('SessionManager', () => {
     expect(manager.list()).toHaveLength(0)
   })
 
+  it('returns session info by id', async () => {
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => fakeConnection(),
+    })
+    const opened = await manager.open({ ...input(), protocol: 'mysql' })
+    expect(manager.info(opened.session_id).protocol).toBe('mysql')
+    await manager.disposeAll()
+  })
+
   it('returns token_id from disconnect so the caller can expire it', async () => {
     const closed: string[] = []
     const manager = new SessionManager({

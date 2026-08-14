@@ -2,7 +2,7 @@
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：让 agent 通过 [JumpServer](https://github.com/jumpserver/jumpserver) 管理资产，并**经 KoKo 堡垒**在资产上执行命令 / 读写文件。流量不直连资产 IP，命令过滤、ACL、会话审计仍然生效。
 
-本版本只支持 **SSH / SFTP**。RDP、数据库等协议不在范围内。
+本版本支持 **SSH / SFTP** 主机，以及经 KoKo 的 **数据库**（MySQL、MariaDB、PostgreSQL、Redis、MongoDB、Oracle、SQL Server 等）。RDP / 图形协议不在范围内。未授权时数据库会话只能查询；INSERT / UPDATE / DELETE 等写操作需要显式打开 `JUMPSERVER_ENABLE_DB_WRITE`。
 
 ## 兼容版本
 
@@ -120,12 +120,14 @@ JUMPSERVER_ORG_ID=00000000-0000-0000-0000-000000000002
 JUMPSERVER_ACCESS_KEY_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
 JUMPSERVER_ACCESS_KEY_SECRET=********************************
 JUMPSERVER_ENABLE_ASSET_ADMIN=false
+JUMPSERVER_ENABLE_DB_WRITE=false
 ```
 
 Access Key 在 JumpServer「个人设置」里创建。跑 dsh 的这台机器要能连上 JumpServer Core（HTTPS）和 KoKo SSH；KoKo 的地址和端口会从 connection-token 自动带出，不用单独填。
 
 - `JUMPSERVER_ORG_ID` 不写则使用 JumpServer 的 Default 组织。换组织改这一行后重启 dsh 即可。
 - `JUMPSERVER_ENABLE_ASSET_ADMIN` 默认 `false`：只能列出、连接该 Access Key 已有权限的资产。设为 `true` 会额外注册创建 / 更新 / 删除主机的工具（`jms_list_platforms`、`jms_create_host`、`jms_update_host`、`jms_delete_host`）。请求仍走 Core RBAC，也不会绕过 KoKo。没有主机管理权限时保持 `false`。
+- `JUMPSERVER_ENABLE_DB_WRITE` 默认 `false`：数据库会话只允许查询（`SELECT` / `SHOW` / `DESCRIBE` / `EXPLAIN` 以及 Redis 读命令等）。设为 `true` 才允许 `INSERT` / `UPDATE` / `DELETE` 等写语句。JumpServer 自己的命令过滤仍然生效。没有写库授权时保持 `false`。
 
 密钥也可以放进 `$DSH_HOME/.credentials.yaml`，变量名相同。JumpServer 地址写在 `.env` 的 `JUMPSERVER_URL` 即可，也可以写在下一节 `cordis.patch.yml` 的 `baseUrl`。
 
@@ -175,16 +177,17 @@ agent 会按需调用 `jms_*` 工具。不要让它直接 SSH 资产 IP。
 
 - `jms_whoami` — 确认当前 API 用户
 - `jms_list_assets` / `jms_get_asset` / `jms_list_accounts` / `jms_list_nodes`
-- `jms_connect` — 创建 connection-token，经 KoKo SSH 建会话（用户名 `JMS-<token-id>`）
-- `jms_exec` — 在资产上执行命令（可审计）
-- `jms_read_file` / `jms_write_file` — 经 KoKo 做 SFTP
+- `jms_connect` — 创建 connection-token，经 KoKo 建会话（用户名 `JMS-<token-id>`）。主机默认 SSH；数据库资产可省略 protocol，或显式传 `mysql` / `postgresql` / `redis` 等
+- `jms_exec` — 在主机上执行命令（可审计）。数据库会话上的写语句同样受 `JUMPSERVER_ENABLE_DB_WRITE` 约束
+- `jms_sql` — 在数据库会话上执行 SQL / Redis / Mongo 命令。未授权只能查询
+- `jms_read_file` / `jms_write_file` — 经 KoKo 做 SFTP（仅主机会话）
 - `jms_list_sessions` / `jms_disconnect`
 
 `JUMPSERVER_ENABLE_ASSET_ADMIN=true` 时额外提供：
 
 - `jms_list_platforms` / `jms_create_host` / `jms_update_host` / `jms_delete_host`
 
-典型顺序：列出资产 → 列出账号 → 连接 → 执行 → 断开。
+典型顺序：列出资产 → 列出账号 → 连接 → 执行 / 查库 → 断开。查数据库时用 `jms_list_assets` 加 `category=database`。
 
 ## 开发
 

@@ -29,7 +29,8 @@ export function registerCatalogTools(ctx: Context, api: JumpServerApi): void {
       search: { type: 'string', description: 'Optional name/address search string' },
       name: { type: 'string', description: 'Optional exact-ish name filter' },
       address: { type: 'string', description: 'Optional address filter' },
-      type: { type: 'string', description: 'Optional asset type, for example host' },
+      type: { type: 'string', description: 'Optional asset type, for example host or mysql' },
+      category: { type: 'string', description: 'Optional category, for example host or database' },
       limit: { type: 'integer', description: 'Page size (default 50)' },
       offset: { type: 'integer', description: 'Page offset (default 0)' },
     },
@@ -47,6 +48,7 @@ export function registerCatalogTools(ctx: Context, api: JumpServerApi): void {
         name: args.name,
         address: args.address,
         type: args.type,
+        category: args.category,
         limit: args.limit,
         offset: args.offset,
       }, exec.signal))

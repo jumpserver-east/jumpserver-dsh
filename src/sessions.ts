@@ -164,6 +164,11 @@ export class SessionManager {
     return [...this.sessions.values()].map(session => session.info)
   }
 
+  /** Public facts for one open session. */
+  info(sessionId: string): SessionInfo {
+    return this.require(sessionId).info
+  }
+
   /** Close every session (plugin unload). */
   async disposeAll(): Promise<void> {
     const ids = [...this.sessions.keys()]

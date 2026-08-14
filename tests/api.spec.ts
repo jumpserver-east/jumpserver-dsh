@@ -129,4 +129,58 @@ describe('createClientProtocol', () => {
     expect(result.token.id).toBe('tok-2')
     expect(calls.some(call => call.method === 'PATCH' && call.url.includes('/tok-1/expire/'))).toBe(true)
   })
+
+  it('uses web_cli for mysql and replaces the HTTP endpoint with KoKo SSH', async () => {
+    const methods: string[] = []
+    const url = encodeJms({
+      token: { id: 'tok-db', value: 'secret' },
+      endpoint: { host: 'koko.example.com', port: 5000 },
+    })
+    const api = apiWith((href, init) => {
+      const method = (init.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && href.endsWith('/authentication/connection-token/')) {
+        const body = JSON.parse(String(init.body)) as { connect_method: string; protocol: string }
+        methods.push(body.connect_method)
+        expect(body.protocol).toBe('mysql')
+        return new Response(JSON.stringify({ id: 'tok-db', value: 'secret', protocol: 'mysql' }), { status: 201 })
+      }
+      if (href.includes('/client-url/')) {
+        return new Response(JSON.stringify({ url }), { status: 200 })
+      }
+      if (href.includes('/terminal/endpoints/')) {
+        return new Response(JSON.stringify({
+          count: 1,
+          results: [{ host: 'koko.example.com', ssh_port: 2222 }],
+        }), { status: 200 })
+      }
+      return new Response('nope', { status: 404 })
+    })
+    const result = await api.createClientProtocol({
+      asset: 'db-1',
+      account: 'app',
+      protocol: 'mysql',
+    })
+    expect(methods[0]).toBe('web_cli')
+    expect(result.client.endpoint).toEqual({ host: 'koko.example.com', port: 2222 })
+    expect(result.client.token).toEqual({ id: 'tok-db', value: 'secret' })
+  })
+})
+
+describe('resolveKokoSshEndpoint', () => {
+  it('reads ssh_port from the endpoints list', async () => {
+    const api = apiWith((href) => {
+      if (href.includes('/terminal/endpoints/')) {
+        return new Response(JSON.stringify({
+          results: [{ host: '', ssh_port: 2222 }, { host: 'other', https_port: 443 }],
+        }), { status: 200 })
+      }
+      return new Response('nope', { status: 404 })
+    })
+    await expect(api.resolveKokoSshEndpoint()).resolves.toEqual({ host: '', port: 2222 })
+  })
+
+  it('falls back to Core host port 2222 when the list is unavailable', async () => {
+    const api = apiWith(() => new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 }))
+    await expect(api.resolveKokoSshEndpoint()).resolves.toEqual({ host: '', port: 2222 })
+  })
 })

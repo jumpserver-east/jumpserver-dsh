@@ -2,7 +2,8 @@ import { pickAccountRef, pickAccountRefDirect, type ResolvedAccountRef } from '.
 import { isUnsupportedConnectMethod, nativeConnectMethods } from './connect-method.js'
 import { parseClientUrlPayload } from './jms-url.js'
 import { asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
-import { JumpServerError, type AccountSummary, type AssetSummary, type ConnectionTokenInfo, type ListPage } from './types.js'
+import { isDatabaseProtocol } from './protocol.js'
+import { JumpServerError, type AccountSummary, type AssetSummary, type ConnectionTokenInfo, type KokoEndpoint, type ListPage } from './types.js'
 import type { JumpServerClient } from './client.js'
 import type { ClientProtocolData } from './types.js'
 
@@ -14,6 +15,7 @@ export interface ListAssetsQuery {
   address?: string
   name?: string
   type?: string
+  category?: string
 }
 
 /** Fields accepted when creating a host. */
@@ -45,6 +47,7 @@ export class JumpServerApi {
       address: query.address,
       name: query.name,
       type: query.type,
+      category: query.category,
     }, signal)
     return unwrapList(body, summarizeAsset)
   }
@@ -206,6 +209,10 @@ export class JumpServerApi {
           leftoverIds.push(token.id)
           const client = await this.getClientProtocol(token.id, signal, token)
           leftoverIds.pop()
+          if (isDatabaseProtocol(input.protocol)) {
+            const endpoint = await this.resolveKokoSshEndpoint(signal)
+            return { token, client: { ...client, endpoint, protocol: input.protocol } }
+          }
           return { token, client }
         } catch (error) {
           lastError = error
@@ -217,6 +224,26 @@ export class JumpServerApi {
     } finally {
       await Promise.all(leftoverIds.map(id => this.expireConnectionToken(id)))
     }
+  }
+
+  /**
+   * KoKo SSH host/port. Database `web_cli` client-url returns HTTP, so SQL
+   * still goes over the same SSH listener the host tools already use.
+   */
+  async resolveKokoSshEndpoint(signal?: AbortSignal): Promise<KokoEndpoint> {
+    try {
+      const body = await this.client.get('/api/v1/terminal/endpoints/', { limit: 50 }, signal)
+      const page = unwrapList(body, asRecord)
+      for (const row of page.results) {
+        const port = Number(row.ssh_port)
+        if (Number.isFinite(port) && port > 0) {
+          return { host: String(row.host ?? ''), port }
+        }
+      }
+    } catch {
+      // Missing permission or empty list: Core hostname + 2222 still works on all-in-one.
+    }
+    return { host: '', port: 2222 }
   }
 }
 

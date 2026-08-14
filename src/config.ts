@@ -7,6 +7,9 @@ export const DEFAULT_ORG_ID_ENV = 'JUMPSERVER_ORG_ID'
 /** Environment variable that enables host create/update/delete tools. */
 export const DEFAULT_ENABLE_ASSET_ADMIN_ENV = 'JUMPSERVER_ENABLE_ASSET_ADMIN'
 
+/** Environment variable that allows INSERT/UPDATE/DELETE on database sessions. */
+export const DEFAULT_ENABLE_DB_WRITE_ENV = 'JUMPSERVER_ENABLE_DB_WRITE'
+
 /** Credential reference for Access Key ID. */
 export const DEFAULT_ACCESS_KEY_ID_ENV = 'JUMPSERVER_ACCESS_KEY_ID'
 
@@ -27,6 +30,8 @@ export interface Config {
   tlsRejectUnauthorized?: boolean
   /** Register host create/update/delete tools. */
   enableAssetAdmin?: boolean
+  /** Allow INSERT/UPDATE/DELETE and other mutations on database sessions. Default false (query only). */
+  enableDbWrite?: boolean
   /** Close idle KoKo SSH sessions after this many milliseconds. */
   idleTimeoutMs?: number
   /** Cooperative timeout for one remote command. */

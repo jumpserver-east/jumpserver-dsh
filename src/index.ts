@@ -34,6 +34,7 @@ export const Config: z<PluginConfig> = z.object({
   accessKeySecretEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_SECRET_ENV),
   tlsRejectUnauthorized: z.boolean().default(false),
   enableAssetAdmin: z.boolean(),
+  enableDbWrite: z.boolean(),
   idleTimeoutMs: z.number().step(1).min(1_000).default(600_000),
   execTimeoutMs: z.number().step(1).min(1_000).default(120_000),
   outputMaxBytes: z.number().step(1).min(1024).default(512_000),
@@ -73,3 +74,5 @@ export { parseJmsUrl, parseClientUrlPayload } from './jms-url.js'
 export { SessionManager } from './sessions.js'
 export { JumpServerError } from './types.js'
 export { nativeConnectMethods } from './connect-method.js'
+export { isDatabaseProtocol, pickAssetProtocol } from './protocol.js'
+export { classifySql, assertSqlAllowed } from './sql-kind.js'

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { DEFAULT_ORG_ID } from '../src/config.js'
-import { resolveEnableAssetAdmin, resolveOrgId } from '../src/credentials.js'
+import { resolveEnableAssetAdmin, resolveEnableDbWrite, resolveOrgId } from '../src/credentials.js'
 
 describe('resolveOrgId', () => {
   afterEach(() => {
@@ -53,6 +53,32 @@ describe('resolveEnableAssetAdmin', () => {
 
   it('rejects an invalid value', () => {
     process.env.JUMPSERVER_ENABLE_ASSET_ADMIN = 'maybe'
-    expect(() => resolveEnableAssetAdmin({})).toThrow(/true or false/)
+    expect(() => resolveEnableAssetAdmin({})).toThrow(/JUMPSERVER_ENABLE_ASSET_ADMIN/)
+  })
+})
+
+describe('resolveEnableDbWrite', () => {
+  afterEach(() => {
+    delete process.env.JUMPSERVER_ENABLE_DB_WRITE
+  })
+
+  it('defaults to false', () => {
+    delete process.env.JUMPSERVER_ENABLE_DB_WRITE
+    expect(resolveEnableDbWrite({})).toBe(false)
+  })
+
+  it('reads JUMPSERVER_ENABLE_DB_WRITE=true', () => {
+    process.env.JUMPSERVER_ENABLE_DB_WRITE = 'true'
+    expect(resolveEnableDbWrite({})).toBe(true)
+  })
+
+  it('prefers config.enableDbWrite over the environment', () => {
+    process.env.JUMPSERVER_ENABLE_DB_WRITE = 'true'
+    expect(resolveEnableDbWrite({ enableDbWrite: false })).toBe(false)
+  })
+
+  it('rejects an invalid value', () => {
+    process.env.JUMPSERVER_ENABLE_DB_WRITE = 'maybe'
+    expect(() => resolveEnableDbWrite({})).toThrow(/JUMPSERVER_ENABLE_DB_WRITE/)
   })
 })

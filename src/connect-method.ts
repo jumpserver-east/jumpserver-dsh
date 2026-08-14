@@ -1,10 +1,22 @@
 import { JumpServerError } from './types.js'
 
-/** Native KoKo methods JumpServer accepts for a given asset protocol. */
+/** Native / KoKo methods JumpServer accepts for a given asset protocol. */
 const NATIVE_CONNECT_METHODS: Record<string, readonly string[]> = {
   ssh: ['ssh_client', 'ssh_guide'],
   sftp: ['sftp_client'],
   telnet: ['ssh_client', 'ssh_guide'],
+  mysql: ['web_cli', 'ssh_client', 'ssh_guide'],
+  mariadb: ['web_cli', 'ssh_client', 'ssh_guide'],
+  postgresql: ['web_cli', 'ssh_client', 'ssh_guide'],
+  postgres: ['web_cli', 'ssh_client', 'ssh_guide'],
+  oracle: ['web_cli', 'ssh_client', 'ssh_guide'],
+  sqlserver: ['web_cli', 'ssh_client', 'ssh_guide'],
+  clickhouse: ['web_cli', 'ssh_client', 'ssh_guide'],
+  db2: ['web_cli', 'ssh_client', 'ssh_guide'],
+  dameng: ['web_cli', 'ssh_client', 'ssh_guide'],
+  redis: ['web_cli', 'ssh_client', 'ssh_guide'],
+  mongodb: ['web_cli', 'ssh_client', 'ssh_guide'],
+  mongo: ['web_cli', 'ssh_client', 'ssh_guide'],
 }
 
 const DEFAULT_CONNECT_METHODS = ['ssh_client', 'ssh_guide'] as const
