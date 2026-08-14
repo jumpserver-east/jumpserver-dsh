@@ -79,6 +79,21 @@ describe('Ssh2Connection.exec exit code', () => {
     expect(result.stdout).toBe('out')
     expect(Object.hasOwn(result, 'exitCode')).toBe(true)
   })
+
+  it('keeps captured output when a command times out', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept) => {
+        const stream = accept()
+        stream.write('partial-out')
+        stream.stderr.write('partial-err')
+      })
+    })
+    const result = await conn.exec('hang', { timeoutMs: 80, maxBytes: 4_096 })
+    expect(result.timedOut).toBe(true)
+    expect(result.stdout).toBe('partial-out')
+    expect(result.stderr).toBe('partial-err')
+    expect(result.exitCode).toBeNull()
+  })
 })
 
 function fakeClient(sftp: Client['sftp']): Client {

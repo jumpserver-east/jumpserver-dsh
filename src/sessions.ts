@@ -10,6 +10,7 @@ export interface ExecResult {
   stdout: string
   stderr: string
   truncated: boolean
+  timedOut?: boolean
 }
 
 /** Result of one SFTP read. */
@@ -285,8 +286,14 @@ export class Ssh2Connection implements SshConnection {
         const stderr = new CappedBuffer(opts.maxBytes)
         let settled = false
         const timer = setTimeout(() => {
+          finish(undefined, {
+            exitCode: null,
+            stdout: stdout.toString(),
+            stderr: stderr.toString(),
+            truncated: stdout.truncated || stderr.truncated,
+            timedOut: true,
+          })
           stream.destroy()
-          finish(new JumpServerError(`command timed out after ${opts.timeoutMs}ms`))
         }, opts.timeoutMs)
         const onAbort = () => {
           stream.destroy()

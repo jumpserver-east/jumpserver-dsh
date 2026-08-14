@@ -89,6 +89,7 @@ export function registerRuntimeTools(
           stdout: { type: 'string', required: true },
           stderr: { type: 'string', required: true },
           truncated: { type: 'boolean', required: true },
+          timed_out: { type: 'boolean' },
         },
       },
       render: (_args, value) => [{
@@ -121,6 +122,7 @@ export function registerRuntimeTools(
         stdout: result.stdout,
         stderr: result.stderr,
         truncated: result.truncated,
+        ...(result.timedOut ? { timed_out: true } : {}),
       }
     },
   }))
@@ -201,12 +203,15 @@ function formatExec(value: {
   truncated: boolean
   exit_code?: number
   signal?: string
+  timed_out?: boolean
 }): string {
-  const status = value.exit_code !== undefined
-    ? `exit ${value.exit_code}`
-    : value.signal
-      ? `signal ${value.signal}`
-      : 'unknown status'
+  const status = value.timed_out
+    ? 'timed out'
+    : value.exit_code !== undefined
+      ? `exit ${value.exit_code}`
+      : value.signal
+        ? `signal ${value.signal}`
+        : 'unknown status'
   const parts = [`$ ${value.command}`, value.stdout, value.stderr, `[${status}${value.truncated ? ', truncated' : ''}]`]
   return parts.filter(part => part.length > 0).join('\n')
 }
