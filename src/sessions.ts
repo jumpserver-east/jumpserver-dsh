@@ -66,7 +66,7 @@ export interface SessionManagerOptions {
 interface LiveSession {
   info: SessionInfo
   connection: SshConnection
-  timer: ReturnType<typeof setTimeout>
+  timer?: ReturnType<typeof setTimeout>
   inFlight: number
 }
 
@@ -493,8 +493,35 @@ class CappedBuffer {
   }
 
   toString(): string {
-    return Buffer.concat(this.chunks, this.size).toString('utf8')
+    return decodeUtf8Prefix(Buffer.concat(this.chunks, this.size))
   }
+}
+
+/** Decode a byte prefix without emitting a replacement char for a cut code point. */
+export function decodeUtf8Prefix(buf: Buffer): string {
+  return buf.subarray(0, utf8SafeEnd(buf)).toString('utf8')
+}
+
+function utf8SafeEnd(buf: Buffer): number {
+  if (buf.length === 0) return 0
+  let i = buf.length - 1
+  let cont = 0
+  while (i >= 0 && (buf[i]! & 0xc0) === 0x80) {
+    cont += 1
+    i -= 1
+    if (cont === 3) break
+  }
+  if (i < 0) return 0
+  const lead = buf[i]!
+  const expected =
+    (lead & 0x80) === 0 ? 0
+      : (lead & 0xe0) === 0xc0 ? 1
+        : (lead & 0xf0) === 0xe0 ? 2
+          : (lead & 0xf8) === 0xf0 ? 3
+            : -1
+  if (expected < 0) return i
+  if (cont < expected) return i
+  return buf.length
 }
 
 function decodeBuffer(buf: Buffer): { content: string; encoding: 'utf8' | 'base64' } {

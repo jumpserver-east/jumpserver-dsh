@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
+import { decodeUtf8Prefix, SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
 import { JumpServerError } from '../src/types.js'
 
 function fakeConnection(): SshConnection & { ended: boolean; commands: string[]; fireClose: () => void } {
@@ -113,6 +113,14 @@ describe('SessionManager', () => {
     const info = await manager.open(input())
     await expect(manager.writeFile(info.session_id, '/tmp/x', 'hello', 'utf8')).rejects.toBeInstanceOf(JumpServerError)
     await manager.disposeAll()
+  })
+})
+
+describe('decodeUtf8Prefix', () => {
+  it('drops a trailing incomplete Chinese code point', () => {
+    const ni = Buffer.from('你', 'utf8')
+    expect(decodeUtf8Prefix(ni.subarray(0, 2))).toBe('')
+    expect(decodeUtf8Prefix(Buffer.concat([ni, ni.subarray(0, 1)]))).toBe('你')
   })
 })
 
