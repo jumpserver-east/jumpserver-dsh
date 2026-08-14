@@ -241,22 +241,6 @@ describe('Ssh2Connection.exec exit code', () => {
     expect(read.content).toBe('A'.repeat(20))
   })
 
-  it('does not clip an uncut stream when the other stream exhausted the budget', async () => {
-    const conn = await openAgainst(servers, conns, (session) => {
-      session.on('exec', (accept) => {
-        const stream = accept()
-        stream.stderr.write(Buffer.from([0x41, 0x80]))
-        stream.write('S'.repeat(80))
-        stream.exit(0)
-        stream.end()
-      })
-    })
-    const result = await conn.exec('mix', { timeoutMs: 2_000, maxBytes: 50 })
-    expect(result.truncated).toBe(true)
-    expect(result.stderr).toBe('A\uFFFD')
-    expect(Buffer.byteLength(result.stdout, 'utf8')).toBe(48)
-  })
-
   it('shares one outputMaxBytes budget across stdout and stderr', async () => {
     const conn = await openAgainst(servers, conns, (session) => {
       session.on('exec', (accept) => {

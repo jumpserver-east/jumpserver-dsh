@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeUtf8Captured, decodeUtf8Prefix, SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
+import { CappedBuffer, decodeUtf8Captured, decodeUtf8Prefix, SessionManager, type OpenSessionInput, type SshConnection } from '../src/sessions.js'
 import { JumpServerError } from '../src/types.js'
 
 function fakeConnection(): SshConnection & { ended: boolean; commands: string[]; fireClose: () => void } {
@@ -100,6 +100,33 @@ describe('SessionManager', () => {
     expect(closed).toEqual(['tok-idle', 'tok-unload'])
   })
 
+  it('waits for onClosed before disconnect and disposeAll resolve', async () => {
+    let expireStarted = 0
+    let expireFinished = 0
+    const onClosed = async () => {
+      expireStarted += 1
+      await new Promise(resolve => setTimeout(resolve, 25))
+      expireFinished += 1
+    }
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      onClosed,
+      connect: async () => fakeConnection(),
+    })
+    const first = await manager.open({ ...input(), tokenId: 'tok-wait' })
+    await manager.disconnect(first.session_id)
+    expect(expireStarted).toBe(1)
+    expect(expireFinished).toBe(1)
+
+    await manager.open({ ...input(), tokenId: 'tok-unload' })
+    await manager.disposeAll()
+    expect(expireStarted).toBe(2)
+    expect(expireFinished).toBe(2)
+  })
+
   it('notifies onClosed when the SSH connection drops', async () => {
     const closed: string[] = []
     const conn = fakeConnection()
@@ -177,6 +204,19 @@ describe('SessionManager', () => {
     const info = await manager.open(input())
     await expect(manager.writeFile(info.session_id, '/tmp/x', 'hello', 'utf8')).rejects.toBeInstanceOf(JumpServerError)
     await manager.disposeAll()
+  })
+})
+
+describe('CappedBuffer', () => {
+  it('does not clip an uncut stream when the shared budget is exhausted', () => {
+    const budget = { remaining: 50, truncated: false }
+    const stderr = new CappedBuffer(budget)
+    const stdout = new CappedBuffer(budget)
+    stderr.push(Buffer.from([0x41, 0x80]))
+    stdout.push(Buffer.alloc(80, 0x53))
+    expect(stderr.toString()).toBe('A\uFFFD')
+    expect(budget.truncated).toBe(true)
+    expect(Buffer.byteLength(stdout.toString(), 'utf8')).toBe(48)
   })
 })
 

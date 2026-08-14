@@ -112,7 +112,7 @@ export class SessionManager {
       if (!current) return
       this.sessions.delete(info.session_id)
       if (current.timer) clearTimeout(current.timer)
-      this.notifyClosed(current.info)
+      void this.notifyClosed(current.info)
     })
     return info
   }
@@ -155,7 +155,7 @@ export class SessionManager {
     this.sessions.delete(sessionId)
     if (live.timer) clearTimeout(live.timer)
     await live.connection.end(signal)
-    this.notifyClosed(live.info)
+    await this.notifyClosed(live.info)
     return { closed: true, session_id: sessionId, ...(live.info.token_id ? { token_id: live.info.token_id } : {}) }
   }
 
@@ -170,10 +170,15 @@ export class SessionManager {
     await Promise.all(ids.map(id => this.disconnect(id)))
   }
 
-  private notifyClosed(info: SessionInfo): void {
+  /** Run the close hook. Never rejects: a failed token expire must not fail the close. */
+  private async notifyClosed(info: SessionInfo): Promise<void> {
     const tokenId = info.token_id
     if (!tokenId || !this.options.onClosed) return
-    void Promise.resolve(this.options.onClosed(tokenId)).catch(() => {})
+    try {
+      await this.options.onClosed(tokenId)
+    } catch {
+      // Token may already be expired or Core unreachable.
+    }
   }
 
   private require(sessionId: string): LiveSession {
@@ -575,12 +580,17 @@ export class Ssh2Connection implements SshConnection {
   }
 }
 
-interface ByteBudget {
+/** Output allowance shared by one command's stdout and stderr. */
+export interface ByteBudget {
   remaining: number
   truncated: boolean
 }
 
-class CappedBuffer {
+/**
+ * Captures a stream's bytes against a shared budget.
+ * `cut` is per-buffer so an untouched stream is never clipped on a UTF-8 boundary.
+ */
+export class CappedBuffer {
   private chunks: Buffer[] = []
   private size = 0
   private cut = false
