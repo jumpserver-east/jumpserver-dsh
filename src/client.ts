@@ -65,6 +65,7 @@ export class JumpServerClient {
   private readonly fetchImpl?: FetchLike
   private readonly now: () => Date
   private insecureFetch?: FetchLike
+  private insecureAgent?: { close(): void }
 
   constructor(options: JumpServerClientOptions) {
     this.baseUrl = options.baseUrl
@@ -190,9 +191,23 @@ export class JumpServerClient {
       return (url, init) => globalThis.fetch(url, init)
     }
     if (!this.insecureFetch) {
-      this.insecureFetch = await createInsecureFetch()
+      const created = await createInsecureFetch()
+      this.insecureAgent = created.agent
+      this.insecureFetch = created.fetch
     }
     return this.insecureFetch
+  }
+
+  /** Release the undici Agent used when TLS verification is off. */
+  dispose(): void {
+    const agent = this.insecureAgent
+    this.insecureAgent = undefined
+    this.insecureFetch = undefined
+    try {
+      agent?.close()
+    } catch {
+      // Pool may already be closed.
+    }
   }
 }
 
@@ -242,9 +257,12 @@ function requestUserAgent(): string {
   return `dsh-jumpserver/${PACKAGE_VERSION} (${platform})`
 }
 
-async function createInsecureFetch(): Promise<FetchLike> {
+async function createInsecureFetch(): Promise<{ fetch: FetchLike; agent: { close(): void } }> {
   const undici = await import('undici')
   const dispatcher = new undici.Agent({ connect: { rejectUnauthorized: false } })
-  return (url, init) =>
-    (undici.fetch as (input: string, init?: object) => Promise<Response>)(url, { ...init, dispatcher })
+  return {
+    agent: dispatcher,
+    fetch: (url, init) =>
+      (undici.fetch as (input: string, init?: object) => Promise<Response>)(url, { ...init, dispatcher }),
+  }
 }

@@ -59,6 +59,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
 
   ctx.effect(() => () => {
     void sessions.disposeAll()
+    client.dispose()
   })
 
   registerPrompt(ctx)
