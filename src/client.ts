@@ -65,6 +65,7 @@ export class JumpServerClient {
   private readonly fetchImpl?: FetchLike
   private readonly now: () => Date
   private insecureTransport?: Promise<{ fetch: FetchLike; agent: { close(): void } }>
+  private disposed = false
 
   constructor(options: JumpServerClientOptions) {
     this.baseUrl = options.baseUrl
@@ -187,18 +188,26 @@ export class JumpServerClient {
 
   private async fetcher(): Promise<FetchLike> {
     if (this.fetchImpl) return this.fetchImpl
+    if (this.disposed) {
+      throw new JumpServerError('JumpServer client was disposed')
+    }
     if (this.tlsRejectUnauthorized) {
       return (url, init) => globalThis.fetch(url, init)
     }
-    this.insecureTransport ??= createInsecureFetch().catch(error => {
+    const transport = this.insecureTransport ??= createInsecureFetch().catch(error => {
       this.insecureTransport = undefined
       throw error
     })
-    return (await this.insecureTransport).fetch
+    const created = await transport
+    if (this.disposed) {
+      throw new JumpServerError('JumpServer client was disposed')
+    }
+    return created.fetch
   }
 
   /** Release the undici Agent used when TLS verification is off. */
   dispose(): void {
+    this.disposed = true
     const pending = this.insecureTransport
     this.insecureTransport = undefined
     void pending?.then(created => {

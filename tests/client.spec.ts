@@ -113,6 +113,17 @@ describe('JumpServerClient', () => {
     await expect(client.get('/api/v1/users/profile/')).rejects.toThrow(/null/)
   })
 
+  it('does not create an Agent after dispose', async () => {
+    const client = new JumpServerClient({
+      baseUrl: 'https://jms.example.com',
+      orgId: 'org',
+      tlsRejectUnauthorized: false,
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
+    })
+    client.dispose()
+    await expect(client.get('/api/v1/users/profile/')).rejects.toThrow('JumpServer client was disposed')
+  })
+
   it('returns undefined from getOrUndefined on 404', async () => {
     const client = new JumpServerClient({
       baseUrl: 'https://jms.example.com',
