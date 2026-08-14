@@ -31,7 +31,7 @@ export function parseJmsUrl(url: string, fallback?: JmsTokenFallback): ClientPro
     throw new JumpServerError(`failed to decode jms:// client-url: ${String(error)}`)
   }
   const payload = asRecord(json)
-  const tokenRow = payload.token !== null && typeof payload.token === 'object'
+  const tokenRow = payload.token !== null && typeof payload.token === 'object' && !Array.isArray(payload.token)
     ? asRecord(payload.token)
     : payload
   const id = String(tokenRow.id ?? payload.id ?? fallback?.id ?? '')
