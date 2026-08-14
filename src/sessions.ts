@@ -235,7 +235,7 @@ function openClient(input: OpenSessionInput, signal?: AbortSignal): Promise<Clie
 
 const SSH_END_TIMEOUT_MS = 3_000
 
-class Ssh2Connection implements SshConnection {
+export class Ssh2Connection implements SshConnection {
   private sftpSession?: Promise<SFTPWrapper>
   private closed = false
   private readonly closeListeners: Array<() => void> = []
@@ -257,22 +257,21 @@ class Ssh2Connection implements SshConnection {
   }
 
   private getSftp(): Promise<SFTPWrapper> {
-    if (!this.sftpSession) {
-      this.sftpSession = new Promise((resolve, reject) => {
-        this.client.sftp((error, sftp) => {
-          if (error) {
-            this.sftpSession = undefined
-            reject(error)
-            return
-          }
-          sftp.on('close', () => {
-            this.sftpSession = undefined
-          })
-          resolve(sftp)
+    if (this.sftpSession) return this.sftpSession
+    const pending = new Promise<SFTPWrapper>((resolve, reject) => {
+      this.client.sftp((error, sftp) => {
+        if (error) return reject(error)
+        sftp.on('close', () => {
+          if (this.sftpSession === pending) this.sftpSession = undefined
         })
+        resolve(sftp)
       })
-    }
-    return this.sftpSession
+    })
+    pending.catch(() => {
+      if (this.sftpSession === pending) this.sftpSession = undefined
+    })
+    this.sftpSession = pending
+    return pending
   }
 
   exec(command: string, opts: { signal?: AbortSignal; timeoutMs: number; maxBytes: number }): Promise<ExecResult> {
