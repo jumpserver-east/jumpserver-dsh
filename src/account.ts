@@ -10,10 +10,10 @@ export interface ResolvedAccountRef {
 }
 
 /**
- * Prefer account id, then username. Display names are only used when unique.
- * Unknown strings are passed through so Core aliases still work.
+ * Resolve @USER / @INPUT / UUID without consulting the account list.
+ * Empty input throws. Display names and usernames return undefined.
  */
-export function pickAccountRef(requested: string, accounts: AccountSummary[]): ResolvedAccountRef {
+export function pickAccountRefDirect(requested: string): ResolvedAccountRef | undefined {
   const raw = requested.trim()
   if (!raw) throw new JumpServerError('account must be non-empty')
   if (raw.startsWith('@')) {
@@ -24,6 +24,17 @@ export function pickAccountRef(requested: string, accounts: AccountSummary[]): R
     }
   }
   if (UUID_RE.test(raw)) return { account: raw, inputUsernameRequired: false }
+  return undefined
+}
+
+/**
+ * Prefer account id, then username. Display names are only used when unique.
+ * Unknown strings are passed through so Core aliases still work.
+ */
+export function pickAccountRef(requested: string, accounts: AccountSummary[]): ResolvedAccountRef {
+  const direct = pickAccountRefDirect(requested)
+  if (direct) return direct
+  const raw = requested.trim()
 
   const byId = accounts.filter(row => row.id === raw)
   if (byId.length === 1 && byId[0]?.id) return { account: byId[0].id, inputUsernameRequired: false }

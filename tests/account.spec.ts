@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { pickAccountRef } from '../src/account.js'
+import { pickAccountRef, pickAccountRefDirect } from '../src/account.js'
 import { JumpServerError } from '../src/types.js'
 
 const accounts = [
@@ -7,6 +7,28 @@ const accounts = [
   { id: 'aaaa1111-2222-3333-4444-555566667777', name: 'dup', username: 'alice' },
   { id: 'bbbb1111-2222-3333-4444-555566667777', name: 'dup', username: 'bob' },
 ]
+
+describe('pickAccountRefDirect', () => {
+  it('returns a UUID without looking at accounts', () => {
+    expect(pickAccountRefDirect('80f9752d-a628-4ac0-8e1f-c418bc7c0568')).toEqual({
+      account: '80f9752d-a628-4ac0-8e1f-c418bc7c0568',
+      inputUsernameRequired: false,
+    })
+  })
+
+  it('returns @USER / @INPUT without looking at accounts', () => {
+    expect(pickAccountRefDirect('@USER')?.inputUsernameRequired).toBe(true)
+    expect(pickAccountRefDirect('@INPUT')?.account).toBe('@INPUT')
+  })
+
+  it('returns undefined for a display name', () => {
+    expect(pickAccountRefDirect('TimePassBy')).toBeUndefined()
+  })
+
+  it('rejects an empty account', () => {
+    expect(() => pickAccountRefDirect('  ')).toThrow(JumpServerError)
+  })
+})
 
 describe('pickAccountRef', () => {
   it('keeps a UUID as-is', () => {
