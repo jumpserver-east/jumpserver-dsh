@@ -64,8 +64,7 @@ export class JumpServerClient {
   private readonly tlsRejectUnauthorized: boolean
   private readonly fetchImpl?: FetchLike
   private readonly now: () => Date
-  private insecureFetch?: FetchLike
-  private insecureAgent?: { close(): void }
+  private insecureTransport?: Promise<{ fetch: FetchLike; agent: { close(): void } }>
 
   constructor(options: JumpServerClientOptions) {
     this.baseUrl = options.baseUrl
@@ -190,24 +189,24 @@ export class JumpServerClient {
     if (this.tlsRejectUnauthorized) {
       return (url, init) => globalThis.fetch(url, init)
     }
-    if (!this.insecureFetch) {
-      const created = await createInsecureFetch()
-      this.insecureAgent = created.agent
-      this.insecureFetch = created.fetch
-    }
-    return this.insecureFetch
+    this.insecureTransport ??= createInsecureFetch().catch(error => {
+      this.insecureTransport = undefined
+      throw error
+    })
+    return (await this.insecureTransport).fetch
   }
 
   /** Release the undici Agent used when TLS verification is off. */
   dispose(): void {
-    const agent = this.insecureAgent
-    this.insecureAgent = undefined
-    this.insecureFetch = undefined
-    try {
-      agent?.close()
-    } catch {
-      // Pool may already be closed.
-    }
+    const pending = this.insecureTransport
+    this.insecureTransport = undefined
+    void pending?.then(created => {
+      try {
+        created.agent.close()
+      } catch {
+        // Pool may already be closed.
+      }
+    }, () => undefined)
   }
 }
 
