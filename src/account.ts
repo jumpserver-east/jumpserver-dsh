@@ -40,18 +40,26 @@ export function pickAccountRef(requested: string, accounts: AccountSummary[]): R
   if (byId.length === 1 && byId[0]?.id) return { account: byId[0].id, inputUsernameRequired: false }
 
   const byUsername = accounts.filter(row => row.username === raw)
+  if (byUsername.length > 1) {
+    throw ambiguousAccount('username', raw, byUsername)
+  }
   if (byUsername.length === 1) {
     return { account: byUsername[0]?.id || byUsername[0]?.username || raw, inputUsernameRequired: false }
   }
 
   const byName = accounts.filter(row => row.name === raw)
   if (byName.length > 1) {
-    const ids = byName.map(row => row.id ?? row.username ?? '?').join(', ')
-    throw new JumpServerError(`multiple accounts named ${JSON.stringify(raw)}; pass an account id (${ids})`)
+    throw ambiguousAccount('named', raw, byName)
   }
   if (byName.length === 1) {
     return { account: byName[0]?.id || byName[0]?.username || raw, inputUsernameRequired: false }
   }
 
   return { account: raw, inputUsernameRequired: false }
+}
+
+function ambiguousAccount(kind: 'username' | 'named', raw: string, rows: AccountSummary[]): JumpServerError {
+  const ids = rows.map(row => row.id ?? row.username ?? '?').join(', ')
+  const label = kind === 'username' ? `with username ${JSON.stringify(raw)}` : `named ${JSON.stringify(raw)}`
+  return new JumpServerError(`multiple accounts ${label}; pass an account id (${ids})`)
 }

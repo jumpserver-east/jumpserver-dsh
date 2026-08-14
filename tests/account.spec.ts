@@ -6,6 +6,8 @@ const accounts = [
   { id: '80f9752d-a628-4ac0-8e1f-c418bc7c0568', name: 'TimePassBy', username: 'root' },
   { id: 'aaaa1111-2222-3333-4444-555566667777', name: 'dup', username: 'alice' },
   { id: 'bbbb1111-2222-3333-4444-555566667777', name: 'dup', username: 'bob' },
+  { id: 'cccc1111-2222-3333-4444-555566667777', name: 'one', username: 'shared' },
+  { id: 'dddd1111-2222-3333-4444-555566667777', name: 'two', username: 'shared' },
 ]
 
 describe('pickAccountRefDirect', () => {
@@ -46,6 +48,10 @@ describe('pickAccountRef', () => {
 
   it('rejects an ambiguous display name', () => {
     expect(() => pickAccountRef('dup', accounts)).toThrow(JumpServerError)
+  })
+
+  it('rejects an ambiguous username', () => {
+    expect(() => pickAccountRef('shared', accounts)).toThrow(/multiple accounts with username/)
   })
 
   it('requires input_username for @USER', () => {
