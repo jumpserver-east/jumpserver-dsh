@@ -43,6 +43,55 @@ describe('Ssh2Connection.getSftp', () => {
     expect(calls).toBe(2)
   })
 
+  it('does not abort a sibling waiter when one getSftp caller is cancelled', async () => {
+    let lateCb: Parameters<Client['sftp']>[0] | undefined
+    const client = fakeClient((cb) => {
+      lateCb = cb
+    })
+    const conn = new Ssh2Connection(client)
+    const ac = new AbortController()
+    const cancelled = conn.readFile('/a', 32, ac.signal)
+    const sibling = conn.readFile('/b', 32)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    ac.abort()
+    await expect(cancelled).rejects.toThrow('SFTP open aborted')
+    lateCb?.(undefined, readableSftp(Buffer.from('ok-b')))
+    expect((await sibling).content).toBe('ok-b')
+  })
+
+  it('does not stat when the read was not truncated', async () => {
+    let stats = 0
+    const sftp = readableSftp(Buffer.from('hello'))
+    const orig = sftp.stat
+    sftp.stat = (path, cb) => {
+      stats += 1
+      orig(path, cb)
+    }
+    const client = fakeClient((cb) => cb(undefined, sftp))
+    const conn = new Ssh2Connection(client)
+    const read = await conn.readFile('/x', 32)
+    expect(read.truncated).toBe(false)
+    expect(read.byteLength).toBe(5)
+    expect(read.capturedBytes).toBe(5)
+    expect(stats).toBe(0)
+  })
+
+  it('stats remote size only when the read is truncated', async () => {
+    let stats = 0
+    const sftp = readableSftp(Buffer.alloc(100, 65))
+    sftp.stat = (_path, cb) => {
+      stats += 1
+      cb(undefined, { size: 100 })
+    }
+    const client = fakeClient((cb) => cb(undefined, sftp))
+    const conn = new Ssh2Connection(client)
+    const read = await conn.readFile('/x', 20)
+    expect(read.truncated).toBe(true)
+    expect(read.capturedBytes).toBe(20)
+    expect(read.byteLength).toBe(100)
+    expect(stats).toBe(1)
+  })
+
   it('ends a late sftp channel after the open was aborted', async () => {
     let lateCb: Parameters<Client['sftp']>[0] | undefined
     let ended = 0
@@ -190,6 +239,22 @@ describe('Ssh2Connection.exec exit code', () => {
     expect(read.capturedBytes).toBe(20)
     expect(read.byteLength).toBe(100)
     expect(read.content).toBe('A'.repeat(20))
+  })
+
+  it('does not clip an uncut stream when the other stream exhausted the budget', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept) => {
+        const stream = accept()
+        stream.stderr.write(Buffer.from([0x41, 0x80]))
+        stream.write('S'.repeat(80))
+        stream.exit(0)
+        stream.end()
+      })
+    })
+    const result = await conn.exec('mix', { timeoutMs: 2_000, maxBytes: 50 })
+    expect(result.truncated).toBe(true)
+    expect(result.stderr).toBe('A\uFFFD')
+    expect(Buffer.byteLength(result.stdout, 'utf8')).toBe(48)
   })
 
   it('shares one outputMaxBytes budget across stdout and stderr', async () => {

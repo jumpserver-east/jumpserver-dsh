@@ -65,6 +65,8 @@ export interface SessionManagerOptions {
   outputMaxBytes: number
   writeMaxBytes: number
   connect?: (input: OpenSessionInput, signal?: AbortSignal) => Promise<SshConnection>
+  /** Called once when a session leaves the map, including idle timeout and unload. */
+  onClosed?: (tokenId: string) => void | Promise<void>
 }
 
 interface LiveSession {
@@ -110,6 +112,7 @@ export class SessionManager {
       if (!current) return
       this.sessions.delete(info.session_id)
       if (current.timer) clearTimeout(current.timer)
+      this.notifyClosed(current.info)
     })
     return info
   }
@@ -152,6 +155,7 @@ export class SessionManager {
     this.sessions.delete(sessionId)
     if (live.timer) clearTimeout(live.timer)
     await live.connection.end(signal)
+    this.notifyClosed(live.info)
     return { closed: true, session_id: sessionId, ...(live.info.token_id ? { token_id: live.info.token_id } : {}) }
   }
 
@@ -164,6 +168,12 @@ export class SessionManager {
   async disposeAll(): Promise<void> {
     const ids = [...this.sessions.keys()]
     await Promise.all(ids.map(id => this.disconnect(id)))
+  }
+
+  private notifyClosed(info: SessionInfo): void {
+    const tokenId = info.token_id
+    if (!tokenId || !this.options.onClosed) return
+    void Promise.resolve(this.options.onClosed(tokenId)).catch(() => {})
   }
 
   private require(sessionId: string): LiveSession {
@@ -245,6 +255,7 @@ export class Ssh2Connection implements SshConnection {
   private sftpPending?: Promise<SFTPWrapper>
   private sftpPendingReject?: (error: Error) => void
   private sftpOpenId = 0
+  private sftpWaiters = 0
   private closed = false
   private readonly closeListeners: Array<() => void> = []
 
@@ -255,6 +266,7 @@ export class Ssh2Connection implements SshConnection {
       this.sftpPending = undefined
       this.sftpPendingReject = undefined
       this.sftpOpenId += 1
+      this.sftpWaiters = 0
       for (const listener of this.closeListeners) listener()
     })
   }
@@ -319,20 +331,30 @@ export class Ssh2Connection implements SshConnection {
   }
 
   private awaitSftp(pending: Promise<SFTPWrapper>, signal?: AbortSignal): Promise<SFTPWrapper> {
-    if (!signal) return pending
+    this.sftpWaiters += 1
+    let released = false
+    const release = () => {
+      if (released) return
+      released = true
+      this.sftpWaiters = Math.max(0, this.sftpWaiters - 1)
+    }
+    if (!signal) return pending.finally(release)
     return new Promise((resolve, reject) => {
       const onAbort = () => {
-        this.abandonPendingSftp()
+        release()
+        if (this.sftpWaiters === 0) this.abandonPendingSftp()
         reject(new JumpServerError('SFTP open aborted'))
       }
       signal.addEventListener('abort', onAbort, { once: true })
       pending.then(
         (sftp) => {
           signal.removeEventListener('abort', onAbort)
+          release()
           resolve(sftp)
         },
         (error) => {
           signal.removeEventListener('abort', onAbort)
+          release()
           reject(error)
         },
       )
@@ -461,7 +483,7 @@ export class Ssh2Connection implements SshConnection {
         const buf = Buffer.concat(chunks, size)
         const decoded = decodeBuffer(buf, truncated)
         const capturedBytes = buf.byteLength
-        void remoteFileSize(sftp, remotePath).then((remoteSize) => {
+        const done = (remoteSize?: number) => {
           finish(undefined, {
             path: remotePath,
             content: decoded.content,
@@ -470,7 +492,12 @@ export class Ssh2Connection implements SshConnection {
             byteLength: remoteSize ?? capturedBytes,
             capturedBytes,
           })
-        })
+        }
+        if (!truncated) {
+          done()
+          return
+        }
+        void remoteFileSize(sftp, remotePath).then(done)
       })
     })
   }
@@ -504,9 +531,8 @@ export class Ssh2Connection implements SshConnection {
   }
 
   async end(signal?: AbortSignal): Promise<void> {
-    const pending = this.sftpPending
     this.abandonPendingSftp()
-    const sftp = this.sftp ?? await pending?.catch(() => undefined)
+    const sftp = this.sftp
     this.sftp = undefined
     try {
       sftp?.end()
@@ -557,16 +583,14 @@ interface ByteBudget {
 class CappedBuffer {
   private chunks: Buffer[] = []
   private size = 0
+  private cut = false
 
   constructor(private readonly budget: ByteBudget) {}
-
-  get truncated(): boolean {
-    return this.budget.truncated
-  }
 
   push(chunk: Buffer): void {
     if (this.budget.remaining <= 0) {
       this.budget.truncated = true
+      this.cut = true
       return
     }
     const room = this.budget.remaining
@@ -575,6 +599,7 @@ class CappedBuffer {
       this.size += room
       this.budget.remaining = 0
       this.budget.truncated = true
+      this.cut = true
       return
     }
     this.chunks.push(chunk)
@@ -583,7 +608,7 @@ class CappedBuffer {
   }
 
   toString(): string {
-    return decodeUtf8Captured(Buffer.concat(this.chunks, this.size), this.truncated)
+    return decodeUtf8Captured(Buffer.concat(this.chunks, this.size), this.cut)
   }
 }
 

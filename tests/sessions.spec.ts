@@ -53,11 +53,13 @@ describe('SessionManager', () => {
   })
 
   it('returns token_id from disconnect so the caller can expire it', async () => {
+    const closed: string[] = []
     const manager = new SessionManager({
       idleTimeoutMs: 60_000,
       execTimeoutMs: 5_000,
       outputMaxBytes: 1024,
       writeMaxBytes: 1024,
+      onClosed: (tokenId) => { closed.push(tokenId) },
       connect: async () => fakeConnection(),
     })
     const info = await manager.open({ ...input(), tokenId: 'tok-1' })
@@ -67,6 +69,51 @@ describe('SessionManager', () => {
       session_id: info.session_id,
       token_id: 'tok-1',
     })
+    expect(closed).toEqual(['tok-1'])
+  })
+
+  it('notifies onClosed when a session idles out or is disposed', async () => {
+    const closed: string[] = []
+    const idle = new SessionManager({
+      idleTimeoutMs: 15,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      onClosed: (tokenId) => { closed.push(tokenId) },
+      connect: async () => fakeConnection(),
+    })
+    await idle.open({ ...input(), tokenId: 'tok-idle' })
+    await new Promise(resolve => setTimeout(resolve, 40))
+    expect(closed).toEqual(['tok-idle'])
+    expect(idle.list()).toHaveLength(0)
+
+    const disposed = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      onClosed: (tokenId) => { closed.push(tokenId) },
+      connect: async () => fakeConnection(),
+    })
+    await disposed.open({ ...input(), tokenId: 'tok-unload' })
+    await disposed.disposeAll()
+    expect(closed).toEqual(['tok-idle', 'tok-unload'])
+  })
+
+  it('notifies onClosed when the SSH connection drops', async () => {
+    const closed: string[] = []
+    const conn = fakeConnection()
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      onClosed: (tokenId) => { closed.push(tokenId) },
+      connect: async () => conn,
+    })
+    await manager.open({ ...input(), tokenId: 'tok-drop' })
+    conn.fireClose()
+    expect(closed).toEqual(['tok-drop'])
   })
 
   it('rejects unknown session ids', async () => {
