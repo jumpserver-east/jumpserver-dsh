@@ -163,13 +163,17 @@ export class JumpServerApi {
   }
 
   /** Decode the KoKo SSH endpoint for a connection token. */
-  async getClientProtocol(tokenId: string, signal?: AbortSignal): Promise<ClientProtocolData> {
+  async getClientProtocol(
+    tokenId: string,
+    signal?: AbortSignal,
+    fallback?: { id?: string; value?: string },
+  ): Promise<ClientProtocolData> {
     const body = await this.client.get(
       `/api/v1/authentication/connection-token/${tokenId}/client-url/`,
       undefined,
       signal,
     )
-    return parseClientUrlPayload(body)
+    return parseClientUrlPayload(body, fallback)
   }
 
   /**
@@ -188,7 +192,7 @@ export class JumpServerApi {
     for (const [index, connectMethod] of methods.entries()) {
       try {
         const token = await this.createConnectionToken({ ...input, connectMethod }, signal)
-        const client = await this.getClientProtocol(token.id, signal)
+        const client = await this.getClientProtocol(token.id, signal, token)
         return { token, client }
       } catch (error) {
         lastError = error

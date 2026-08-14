@@ -32,4 +32,16 @@ describe('parseJmsUrl', () => {
       asset: { id: 'asset-1', name: 'web-1', address: '10.0.0.8' },
     })
   })
+
+  it('fills token value from the create-token fallback when jms:// omits it', () => {
+    const payload = {
+      token: { id: 'tok-1' },
+      endpoint: { host: 'koko.example.com', port: 2222 },
+    }
+    const encoded = `jms://${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')}`
+    expect(parseJmsUrl(encoded, { value: 'from-create' }).token).toEqual({
+      id: 'tok-1',
+      value: 'from-create',
+    })
+  })
 })

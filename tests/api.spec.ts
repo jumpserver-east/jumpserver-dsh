@@ -68,3 +68,31 @@ describe('resolveAccount', () => {
       })
   })
 })
+
+function encodeJms(payload: unknown): string {
+  return `jms://${Buffer.from(JSON.stringify(payload), 'utf8').toString('base64')}`
+}
+
+describe('createClientProtocol', () => {
+  it('uses the create-token value when jms:// omits value', async () => {
+    const url = encodeJms({
+      token: { id: 'tok-1' },
+      endpoint: { host: 'koko.example.com', port: 2222 },
+    })
+    const api = apiWith((href) => {
+      if (href.endsWith('/authentication/connection-token/')) {
+        return new Response(JSON.stringify({ id: 'tok-1', value: 'from-create', protocol: 'ssh' }), { status: 201 })
+      }
+      if (href.includes('/client-url/')) {
+        return new Response(JSON.stringify({ url }), { status: 200 })
+      }
+      return new Response('nope', { status: 404 })
+    })
+    const result = await api.createClientProtocol({
+      asset: 'asset-1',
+      account: 'root',
+      protocol: 'ssh',
+    })
+    expect(result.client.token).toEqual({ id: 'tok-1', value: 'from-create' })
+  })
+})

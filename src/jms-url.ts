@@ -2,21 +2,27 @@ import { JumpServerError } from './types.js'
 import type { ClientProtocolData, KokoEndpoint } from './types.js'
 import { asRecord } from './normalize.js'
 
+/** Token fields that may already be known from the create-token response. */
+export interface JmsTokenFallback {
+  id?: string
+  value?: string
+}
+
 /**
  * Decode `GET /api/v1/authentication/connection-token/{id}/client-url/` into
  * host, port, and token fields used for KoKo SSH.
  */
-export function parseClientUrlPayload(body: unknown): ClientProtocolData {
+export function parseClientUrlPayload(body: unknown, fallback?: JmsTokenFallback): ClientProtocolData {
   const row = asRecord(body)
   const url = row.url
   if (typeof url !== 'string' || url.length === 0) {
     throw new JumpServerError('connection-token client-url response missing url', undefined, body)
   }
-  return parseJmsUrl(url)
+  return parseJmsUrl(url, fallback)
 }
 
 /** Decode a `jms://` deep link produced by JumpServer. */
-export function parseJmsUrl(url: string): ClientProtocolData {
+export function parseJmsUrl(url: string, fallback?: JmsTokenFallback): ClientProtocolData {
   const encoded = url.startsWith('jms://') ? url.slice('jms://'.length) : url
   let json: unknown
   try {
@@ -26,8 +32,8 @@ export function parseJmsUrl(url: string): ClientProtocolData {
   }
   const payload = asRecord(json)
   const tokenRow = payload.token !== undefined ? asRecord(payload.token) : payload
-  const id = String(tokenRow.id ?? payload.id ?? '')
-  const value = String(tokenRow.value ?? payload.value ?? '')
+  const id = String(tokenRow.id ?? payload.id ?? fallback?.id ?? '')
+  const value = String(tokenRow.value ?? payload.value ?? fallback?.value ?? '')
   if (!id || !value) {
     throw new JumpServerError('jms:// payload missing token id/value', undefined, json)
   }
