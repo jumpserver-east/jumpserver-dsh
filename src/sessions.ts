@@ -96,7 +96,6 @@ export class SessionManager {
     const live: LiveSession = {
       info,
       connection,
-      timer: setTimeout(() => undefined, this.options.idleTimeoutMs),
       inFlight: 0,
     }
     this.sessions.set(info.session_id, live)
@@ -105,7 +104,7 @@ export class SessionManager {
       const current = this.sessions.get(info.session_id)
       if (!current) return
       this.sessions.delete(info.session_id)
-      clearTimeout(current.timer)
+      if (current.timer) clearTimeout(current.timer)
     })
     return info
   }
@@ -146,7 +145,7 @@ export class SessionManager {
     const live = this.sessions.get(sessionId)
     if (!live) return { closed: false, session_id: sessionId }
     this.sessions.delete(sessionId)
-    clearTimeout(live.timer)
+    if (live.timer) clearTimeout(live.timer)
     await live.connection.end(signal)
     return { closed: true, session_id: sessionId }
   }
@@ -181,7 +180,7 @@ export class SessionManager {
   }
 
   private scheduleIdle(live: LiveSession): void {
-    clearTimeout(live.timer)
+    if (live.timer) clearTimeout(live.timer)
     live.timer = setTimeout(() => {
       if (live.inFlight > 0) {
         this.scheduleIdle(live)
