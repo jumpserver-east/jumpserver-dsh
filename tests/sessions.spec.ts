@@ -13,7 +13,7 @@ function fakeConnection(): SshConnection & { ended: boolean; commands: string[];
       return { exitCode: 0, stdout: `ok:${command}`, stderr: '', truncated: false }
     },
     async readFile(remotePath) {
-      return { path: remotePath, content: 'hello', encoding: 'utf8', truncated: false, byteLength: 5 }
+      return { path: remotePath, content: 'hello', encoding: 'utf8', truncated: false, byteLength: 5, capturedBytes: 5 }
     },
     async writeFile() {},
     async end() {
@@ -50,6 +50,23 @@ describe('SessionManager', () => {
     })
     expect(conn.ended).toBe(true)
     expect(manager.list()).toHaveLength(0)
+  })
+
+  it('returns token_id from disconnect so the caller can expire it', async () => {
+    const manager = new SessionManager({
+      idleTimeoutMs: 60_000,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => fakeConnection(),
+    })
+    const info = await manager.open({ ...input(), tokenId: 'tok-1' })
+    expect(info.token_id).toBe('tok-1')
+    await expect(manager.disconnect(info.session_id)).resolves.toEqual({
+      closed: true,
+      session_id: info.session_id,
+      token_id: 'tok-1',
+    })
   })
 
   it('rejects unknown session ids', async () => {

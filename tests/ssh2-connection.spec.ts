@@ -25,6 +25,59 @@ describe('Ssh2Connection.getSftp', () => {
     expect(calls).toBe(2)
   })
 
+  it('aborts a hung sftp open and does not cache it', async () => {
+    let calls = 0
+    const client = fakeClient((cb) => {
+      calls += 1
+      if (calls === 1) return
+      cb(undefined, readableSftp(Buffer.from('ok')))
+    })
+    const conn = new Ssh2Connection(client)
+    const ac = new AbortController()
+    const pending = conn.readFile('/x', 32, ac.signal)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    ac.abort()
+    await expect(pending).rejects.toThrow('SFTP open aborted')
+    const result = await conn.readFile('/x', 32)
+    expect(result.content).toBe('ok')
+    expect(calls).toBe(2)
+  })
+
+  it('ends a late sftp channel after the open was aborted', async () => {
+    let lateCb: Parameters<Client['sftp']>[0] | undefined
+    let ended = 0
+    const client = fakeClient((cb) => {
+      lateCb = cb
+    })
+    const conn = new Ssh2Connection(client)
+    const ac = new AbortController()
+    const pending = conn.readFile('/x', 32, ac.signal)
+    await new Promise(resolve => setTimeout(resolve, 10))
+    ac.abort()
+    await expect(pending).rejects.toThrow('SFTP open aborted')
+    const sftp = readableSftp(Buffer.from('late'))
+    sftp.end = () => {
+      ended += 1
+    }
+    lateCb?.(undefined, sftp)
+    expect(ended).toBe(1)
+  })
+
+  it('keeps a ready sftp channel when a later read is aborted', async () => {
+    let calls = 0
+    const client = fakeClient((cb) => {
+      calls += 1
+      cb(undefined, readableSftp(Buffer.from('ok')))
+    })
+    const conn = new Ssh2Connection(client)
+    expect((await conn.readFile('/x', 32)).content).toBe('ok')
+    const ac = new AbortController()
+    ac.abort()
+    await expect(conn.readFile('/x', 32, ac.signal)).rejects.toThrow('read aborted')
+    expect((await conn.readFile('/x', 32)).content).toBe('ok')
+    expect(calls).toBe(1)
+  })
+
   it('does not clear a newer sftp session on a late close', async () => {
     const opened: EventEmitter[] = []
     const client = fakeClient((cb) => {
@@ -126,6 +179,33 @@ describe('Ssh2Connection.exec exit code', () => {
     const again = await conn.readFile('/tmp/hello.txt', 4_096)
     expect(again.content).toBe('hello-sftp')
   })
+
+  it('reports remote size as byteLength when the read is truncated', async () => {
+    const files = new Map<string, Buffer>([['/tmp/big.txt', Buffer.alloc(100, 65)]])
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('sftp', (accept) => attachMemorySftp(accept(), files))
+    })
+    const read = await conn.readFile('/tmp/big.txt', 20)
+    expect(read.truncated).toBe(true)
+    expect(read.capturedBytes).toBe(20)
+    expect(read.byteLength).toBe(100)
+    expect(read.content).toBe('A'.repeat(20))
+  })
+
+  it('shares one outputMaxBytes budget across stdout and stderr', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept) => {
+        const stream = accept()
+        stream.write('S'.repeat(80))
+        stream.stderr.write('E'.repeat(80))
+        stream.exit(0)
+        stream.end()
+      })
+    })
+    const result = await conn.exec('both', { timeoutMs: 2_000, maxBytes: 50 })
+    expect(result.truncated).toBe(true)
+    expect(Buffer.byteLength(result.stdout, 'utf8') + Buffer.byteLength(result.stderr, 'utf8')).toBe(50)
+  })
 })
 
 function fakeClient(sftp: Client['sftp']): Client {
@@ -134,7 +214,11 @@ function fakeClient(sftp: Client['sftp']): Client {
   return client
 }
 
-function readableSftp(data: Buffer): EventEmitter & { createReadStream: () => PassThrough } {
+function readableSftp(data: Buffer): EventEmitter & {
+  createReadStream: () => PassThrough
+  stat: (path: string, cb: (error?: Error, attrs?: { size: number }) => void) => void
+  end: () => void
+} {
   return Object.assign(new EventEmitter(), {
     createReadStream() {
       const stream = new PassThrough()
@@ -143,6 +227,10 @@ function readableSftp(data: Buffer): EventEmitter & { createReadStream: () => Pa
       })
       return stream
     },
+    stat(_path: string, cb: (error?: Error, attrs?: { size: number }) => void) {
+      cb(undefined, { size: data.length })
+    },
+    end() {},
   })
 }
 
