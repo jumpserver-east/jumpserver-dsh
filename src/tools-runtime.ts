@@ -6,7 +6,7 @@ import type { ResolvedConfig } from './config.js'
 import { resolveBaseUrl } from './credentials.js'
 import { resolveKokoEndpoint } from './koko-endpoint.js'
 import { jsonOutput } from './render.js'
-import { JumpServerError } from './types.js'
+import { JumpServerError, type ClientProtocolData, type ConnectionTokenInfo } from './types.js'
 import type { SessionManager } from './sessions.js'
 
 const DEFAULT_PROTOCOL = 'ssh'
@@ -51,22 +51,13 @@ export function registerRuntimeTools(
         protocol,
         inputUsername: args.input_username,
       }, exec.signal)
-      const { host, port } = resolveKokoEndpoint(client.endpoint, resolveBaseUrl(config))
-      const info = await sessions.open({
-        host,
-        port,
-        username: `JMS-${client.token.id}`,
-        password: client.token.value,
+      return await openKokoSession(api, sessions, config, {
+        token,
+        client,
         assetId,
         account: resolvedAccount.account,
         protocol,
       }, exec.signal)
-      return asJson({
-        ...info,
-        token_id: token.id,
-        ...(token.date_expired ? { date_expired: token.date_expired } : {}),
-        koko: { host, port },
-      })
     },
   }))
 
@@ -191,9 +182,52 @@ export function registerRuntimeTools(
     output: jsonOutput,
     presentCall: args => ({ card: 'generic', title: `Disconnect ${args.session_id}`, kind: 'other' }),
     async execute(args, exec) {
-      return await sessions.disconnect(args.session_id, exec.signal)
+      const result = await sessions.disconnect(args.session_id, exec.signal)
+      if (result.token_id) await api.expireConnectionToken(result.token_id)
+      return result
     },
   }))
+}
+
+/**
+ * Open KoKo SSH after createClientProtocol. Expire the token if endpoint
+ * resolve or SSH fails — that method already popped the id from leftoverIds.
+ */
+export async function openKokoSession(
+  api: Pick<JumpServerApi, 'expireConnectionToken'>,
+  sessions: SessionManager,
+  config: ResolvedConfig,
+  input: {
+    token: ConnectionTokenInfo
+    client: ClientProtocolData
+    assetId: string
+    account: string
+    protocol: string
+  },
+  signal?: AbortSignal,
+): Promise<JsonValue> {
+  try {
+    const { host, port } = resolveKokoEndpoint(input.client.endpoint, resolveBaseUrl(config))
+    const info = await sessions.open({
+      host,
+      port,
+      username: `JMS-${input.client.token.id}`,
+      password: input.client.token.value,
+      assetId: input.assetId,
+      account: input.account,
+      protocol: input.protocol,
+      tokenId: input.token.id,
+    }, signal)
+    return asJson({
+      ...info,
+      token_id: input.token.id,
+      ...(input.token.date_expired ? { date_expired: input.token.date_expired } : {}),
+      koko: { host, port },
+    })
+  } catch (error) {
+    await api.expireConnectionToken(input.token.id)
+    throw error
+  }
 }
 
 function formatExec(value: {
