@@ -48,9 +48,9 @@ export interface OpenSessionInput {
 /** Minimal SSH surface used by the session manager (and tests). */
 export interface SshConnection {
   exec(command: string, opts: { signal?: AbortSignal; timeoutMs: number; maxBytes: number }): Promise<ExecResult>
-  readFile(remotePath: string, maxBytes: number): Promise<FileReadResult>
-  writeFile(remotePath: string, data: Buffer): Promise<void>
-  end(): Promise<void>
+  readFile(remotePath: string, maxBytes: number, signal?: AbortSignal): Promise<FileReadResult>
+  writeFile(remotePath: string, data: Buffer, signal?: AbortSignal): Promise<void>
+  end(signal?: AbortSignal): Promise<void>
   onClose(cb: () => void): void
 }
 
@@ -122,14 +122,14 @@ export class SessionManager {
   }
 
   /** Read a remote file over SFTP. */
-  async readFile(sessionId: string, remotePath: string): Promise<FileReadResult & { session_id: string }> {
+  async readFile(sessionId: string, remotePath: string, signal?: AbortSignal): Promise<FileReadResult & { session_id: string }> {
     const live = this.require(sessionId)
-    const result = await this.withBusy(live, () => live.connection.readFile(remotePath, this.options.outputMaxBytes))
+    const result = await this.withBusy(live, () => live.connection.readFile(remotePath, this.options.outputMaxBytes, signal))
     return { session_id: sessionId, ...result }
   }
 
   /** Write a remote file over SFTP. */
-  async writeFile(sessionId: string, remotePath: string, content: string, encoding: 'utf8' | 'base64'): Promise<{ session_id: string; path: string; byteLength: number }> {
+  async writeFile(sessionId: string, remotePath: string, content: string, encoding: 'utf8' | 'base64', signal?: AbortSignal): Promise<{ session_id: string; path: string; byteLength: number }> {
     const live = this.require(sessionId)
     const data = encoding === 'base64' ? Buffer.from(content, 'base64') : Buffer.from(content, 'utf8')
     if (data.byteLength > this.options.writeMaxBytes) {
@@ -137,17 +137,17 @@ export class SessionManager {
         `write exceeds writeMaxBytes (${data.byteLength} > ${this.options.writeMaxBytes})`,
       )
     }
-    await this.withBusy(live, () => live.connection.writeFile(remotePath, data))
+    await this.withBusy(live, () => live.connection.writeFile(remotePath, data, signal))
     return { session_id: sessionId, path: remotePath, byteLength: data.byteLength }
   }
 
   /** Close one session. Unknown ids are a no-op. */
-  async disconnect(sessionId: string): Promise<{ closed: boolean; session_id: string }> {
+  async disconnect(sessionId: string, signal?: AbortSignal): Promise<{ closed: boolean; session_id: string }> {
     const live = this.sessions.get(sessionId)
     if (!live) return { closed: false, session_id: sessionId }
     this.sessions.delete(sessionId)
     clearTimeout(live.timer)
-    await live.connection.end()
+    await live.connection.end(signal)
     return { closed: true, session_id: sessionId }
   }
 
@@ -342,13 +342,18 @@ export class Ssh2Connection implements SshConnection {
     })
   }
 
-  async readFile(remotePath: string, maxBytes: number): Promise<FileReadResult> {
+  async readFile(remotePath: string, maxBytes: number, signal?: AbortSignal): Promise<FileReadResult> {
     const sftp = await this.getSftp()
     return new Promise((resolve, reject) => {
       let settled = false
+      const onAbort = () => {
+        stream.destroy()
+        finish(new JumpServerError('read aborted'))
+      }
       const finish = (error?: Error, value?: FileReadResult) => {
         if (settled) return
         settled = true
+        signal?.removeEventListener('abort', onAbort)
         if (error) reject(error)
         else resolve(value as FileReadResult)
       }
@@ -356,6 +361,12 @@ export class Ssh2Connection implements SshConnection {
       let size = 0
       let truncated = false
       const stream = sftp.createReadStream(remotePath)
+      if (signal?.aborted) {
+        stream.destroy()
+        finish(new JumpServerError('read aborted'))
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       stream.on('data', (chunk: Buffer) => {
         if (size >= maxBytes) {
           truncated = true
@@ -386,24 +397,35 @@ export class Ssh2Connection implements SshConnection {
     })
   }
 
-  async writeFile(remotePath: string, data: Buffer): Promise<void> {
+  async writeFile(remotePath: string, data: Buffer, signal?: AbortSignal): Promise<void> {
     const sftp = await this.getSftp()
     return new Promise((resolve, reject) => {
       let settled = false
+      const onAbort = () => {
+        stream.destroy()
+        finish(new JumpServerError('write aborted'))
+      }
       const finish = (error?: Error) => {
         if (settled) return
         settled = true
+        signal?.removeEventListener('abort', onAbort)
         if (error) reject(error)
         else resolve()
       }
       const stream = sftp.createWriteStream(remotePath)
+      if (signal?.aborted) {
+        stream.destroy()
+        finish(new JumpServerError('write aborted'))
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       stream.on('error', (streamError: Error) => finish(streamError))
       stream.on('close', () => finish())
       stream.end(data)
     })
   }
 
-  async end(): Promise<void> {
+  async end(signal?: AbortSignal): Promise<void> {
     const sftp = await this.sftpSession?.catch(() => undefined)
     try {
       sftp?.end()
@@ -415,7 +437,17 @@ export class Ssh2Connection implements SshConnection {
     await new Promise<void>((resolve) => {
       const done = () => {
         clearTimeout(timer)
+        signal?.removeEventListener('abort', onAbort)
         resolve()
+      }
+      const onAbort = () => {
+        try {
+          this.client.destroy()
+        } catch {
+          // Ignore a second teardown.
+        }
+        this.closed = true
+        done()
       }
       const timer = setTimeout(() => {
         try {
@@ -426,6 +458,11 @@ export class Ssh2Connection implements SshConnection {
         this.closed = true
         resolve()
       }, SSH_END_TIMEOUT_MS)
+      if (signal?.aborted) {
+        onAbort()
+        return
+      }
+      signal?.addEventListener('abort', onAbort, { once: true })
       this.client.once('close', done)
       this.client.end()
     })

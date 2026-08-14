@@ -141,9 +141,9 @@ export function registerRuntimeTools(
       kind: 'read',
       locations: [{ path: args.path }],
     }),
-    async execute(args) {
+    async execute(args, exec) {
       if (!args.path.trim()) throw new Error('path must be non-empty')
-      return asJson(await sessions.readFile(args.session_id, args.path))
+      return asJson(await sessions.readFile(args.session_id, args.path, exec.signal))
     },
   }))
 
@@ -163,10 +163,10 @@ export function registerRuntimeTools(
       kind: 'edit',
       locations: [{ path: args.path }],
     }),
-    async execute(args) {
+    async execute(args, exec) {
       if (!args.path.trim()) throw new Error('path must be non-empty')
       const encoding = args.encoding === 'base64' ? 'base64' : 'utf8'
-      return asJson(await sessions.writeFile(args.session_id, args.path, args.content, encoding))
+      return asJson(await sessions.writeFile(args.session_id, args.path, args.content, encoding, exec.signal))
     },
   }))
 
@@ -190,8 +190,8 @@ export function registerRuntimeTools(
     },
     output: jsonOutput,
     presentCall: args => ({ card: 'generic', title: `Disconnect ${args.session_id}`, kind: 'other' }),
-    async execute(args) {
-      return await sessions.disconnect(args.session_id)
+    async execute(args, exec) {
+      return await sessions.disconnect(args.session_id, exec.signal)
     },
   }))
 }
