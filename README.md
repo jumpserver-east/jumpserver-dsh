@@ -15,29 +15,91 @@
 
 ## 安装
 
-本机已安装 `dsh` 后，优先从 GitHub 安装：
+`dsh plugin` 会把命令转给 `pnpm`，在目标 profile 目录里装包。本机需要 Node.js、[pnpm](https://pnpm.io)（macOS 可用 `brew install pnpm`），以及 DeepSeek Harness CLI。
+
+`dsh` 不是系统自带命令。没装过全局包时用：
+
+```sh
+npx @deepseek-ai/dsh <子命令>
+```
+
+也可以 `npm install -g @deepseek-ai/dsh`，之后直接打 `dsh`。不要用 Homebrew 的 `dsh` 配方，那是另一个 Unix 工具。
+
+下面命令里的 `dsh` 都可以换成 `npx @deepseek-ai/dsh`。web profile 的配置在 `~/.dsh/profiles/web/`（Windows 为 `%USERPROFILE%\.dsh\profiles\web\`）。
+
+### 从 GitHub 安装
 
 ```sh
 dsh plugin --profile web add github:jumpserver-east/jumpserver-dsh
 ```
 
-pnpm >= 10 可能拒绝执行 git 依赖的 `prepare`。把 pnpm 打印的包名写进该 profile 的 `pnpm-workspace.yaml`：
+pnpm 会把仓库拉到临时目录，先跑插件自己的 `pnpm install`，再执行 `prepare`（`tsc`）。实测会依次碰到两道拦：
+
+1. **构建授权**  
+   报 `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`。把 pnpm 打印的 key 写进该 profile 的 `pnpm-workspace.yaml` 后重跑：
 
 ```yaml
 allowBuilds:
   dsh-jumpserver: true
 ```
 
-然后重新执行 `dsh plugin add`。可以用 `github:jumpserver-east/jumpserver-dsh#<sha>` 钉死提交。
+   若打印的是带 tarball URL 的长 key，按它原样加一行。
 
-从本地仓库安装：
+2. **包太新**  
+   报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`。pnpm 11 默认拒绝 lockfile 里发布时间不足约 24 小时的包。DeepSeek Harness 刚发 rc 时，`@deepseek-ai/*` 很容易踩中。  
+   可以等过截止时间再装，或在该 profile 的 `pnpm-workspace.yaml` 里临时加 `minimumReleaseAge: 0` 后重试。也可以改走下面的本地安装——本地 `link:` 不会在临时目录里按插件 lockfile 再装一遍。
+
+可以用 `github:jumpserver-east/jumpserver-dsh#<sha>` 钉死提交。
+
+### 从本地仓库安装
+
+适合改插件，或 GitHub 安装被年龄检查拦住时。
 
 ```sh
 cd jumpserver-dsh
-pnpm install
+pnpm install --config.minimum-release-age=0
 pnpm build
 dsh plugin --profile web add .
 ```
+
+`--config.minimum-release-age=0` 只在本仓库 `pnpm install` 也触发同样检查时需要；包够老了可以去掉。`add .` 必须在仓库目录执行（`.` 相对的是当前工作目录，不是 profile 目录）。
+
+成功后 profile 的 `package.json` 应类似：
+
+```json
+{
+  "dependencies": {
+    "dsh-jumpserver": "link:/绝对路径/jumpserver-dsh"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "dsh-jumpserver"
+      ]
+    }
+  }
+}
+```
+
+`dsh plugin add` 会自己核对 `bundles`。若命令很慢或中途失败，可以在 profile 目录直接 link，再把 `dsh-jumpserver` 写进 `dsh.profile.bundles`：
+
+```sh
+cd ~/.dsh/profiles/web
+pnpm add /绝对路径/jumpserver-dsh
+```
+
+改本地代码后执行 `pnpm build`，再重启 dsh。
+
+profile 的 `pnpm-workspace.yaml` 建议至少有：
+
+```yaml
+allowBuilds:
+  dsh-jumpserver: true
+```
+
+若 pnpm 提示忽略了 `ssh2` 的构建脚本，再加上 `ssh2: true`（以及它依赖的 `cpu-features`）。
 
 ## 配置
 
@@ -124,10 +186,12 @@ agent 会按需调用 `jms_*` 工具。不要让它直接 SSH 资产 IP。
 ## 开发
 
 ```sh
-pnpm install
+pnpm install --config.minimum-release-age=0
 pnpm test
 pnpm build
 ```
+
+`--config.minimum-release-age=0` 同上，仅在 pnpm 11 因 `@deepseek-ai/*` 发布时间不足 24 小时拒装时需要。
 
 ## License
 
