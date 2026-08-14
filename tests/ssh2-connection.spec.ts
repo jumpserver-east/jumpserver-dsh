@@ -1,8 +1,10 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
-import { describe, expect, it } from 'vitest'
-import type { Client } from 'ssh2'
-import { Ssh2Connection } from '../src/sessions.js'
+import { afterEach, describe, expect, it } from 'vitest'
+import { Server, utils, type Client } from 'ssh2'
+import { connectSsh2, Ssh2Connection, type SshConnection } from '../src/sessions.js'
+
+const hostKey = utils.generateKeyPairSync('ed25519').private
 
 describe('Ssh2Connection.getSftp', () => {
   it('does not cache a synchronously rejected sftp promise', async () => {
@@ -39,6 +41,46 @@ describe('Ssh2Connection.getSftp', () => {
   })
 })
 
+describe('Ssh2Connection.exec exit code', () => {
+  const servers: Server[] = []
+  const conns: SshConnection[] = []
+
+  afterEach(async () => {
+    await Promise.all(conns.splice(0).map(conn => conn.end().catch(() => undefined)))
+    await Promise.all(servers.splice(0).map(server => closeServer(server)))
+  })
+
+  it('returns a numeric exit code', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept, _reject, info) => {
+        const stream = accept()
+        stream.write(`out:${info.command}`)
+        stream.stderr.write('err')
+        stream.exit(7)
+        stream.end()
+      })
+    })
+    const result = await conn.exec('uname', { timeoutMs: 2_000, maxBytes: 4_096 })
+    expect(result.stdout).toBe('out:uname')
+    expect(result.stderr).toBe('err')
+    expect(result.exitCode).toBe(7)
+  })
+
+  it('treats a missing exit-status as null, not undefined', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept) => {
+        const stream = accept()
+        stream.write('out')
+        stream.end()
+      })
+    })
+    const result = await conn.exec('no-status', { timeoutMs: 2_000, maxBytes: 4_096 })
+    expect(result.exitCode).toBeNull()
+    expect(result.stdout).toBe('out')
+    expect(Object.hasOwn(result, 'exitCode')).toBe(true)
+  })
+})
+
 function fakeClient(sftp: Client['sftp']): Client {
   const client = new EventEmitter() as Client
   client.sftp = sftp
@@ -54,5 +96,51 @@ function readableSftp(data: Buffer): EventEmitter & { createReadStream: () => Pa
       })
       return stream
     },
+  })
+}
+
+async function openAgainst(
+  servers: Server[],
+  conns: SshConnection[],
+  onSession: (session: import('ssh2').Session) => void,
+): Promise<SshConnection> {
+  const server = new Server({ hostKeys: [hostKey] }, (client) => {
+    client.on('authentication', (ctx) => ctx.accept())
+    client.on('ready', () => {
+      client.on('session', (accept) => {
+        onSession(accept())
+      })
+    })
+  })
+  servers.push(server)
+  const port = await listen(server)
+  const conn = await connectSsh2({
+    host: '127.0.0.1',
+    port,
+    username: 'user',
+    password: 'pass',
+    assetId: 'asset-1',
+    account: 'root',
+    protocol: 'ssh',
+    readyTimeoutMs: 5_000,
+  })
+  conns.push(conn)
+  return conn
+}
+
+function listen(server: Server): Promise<number> {
+  return new Promise((resolve, reject) => {
+    server.once('error', reject)
+    server.listen(0, '127.0.0.1', () => {
+      const addr = server.address()
+      if (typeof addr === 'object' && addr) resolve(addr.port)
+      else reject(new Error('SSH test server has no port'))
+    })
+  })
+}
+
+function closeServer(server: Server): Promise<void> {
+  return new Promise((resolve) => {
+    server.close(() => resolve())
   })
 }

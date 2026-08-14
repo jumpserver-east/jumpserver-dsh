@@ -116,7 +116,7 @@ export function registerRuntimeTools(
       return {
         session_id: result.session_id,
         command: result.command,
-        ...(result.exitCode === null ? {} : { exit_code: result.exitCode }),
+        ...(typeof result.exitCode === 'number' ? { exit_code: result.exitCode } : {}),
         ...(result.signal ? { signal: result.signal } : {}),
         stdout: result.stdout,
         stderr: result.stderr,

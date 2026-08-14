@@ -310,7 +310,7 @@ export class Ssh2Connection implements SshConnection {
         stream.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
         stream.on('close', (code: number | null, signalName?: string) => {
           finish(undefined, {
-            exitCode: code,
+            exitCode: typeof code === 'number' ? code : null,
             ...(signalName ? { signal: signalName } : {}),
             stdout: stdout.toString(),
             stderr: stderr.toString(),
