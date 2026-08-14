@@ -57,10 +57,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     writeMaxBytes: resolved.writeMaxBytes,
   })
 
-  ctx.effect(() => () => {
-    void sessions.disposeAll()
-    client.dispose()
-  })
+  ctx.effect(() => () => sessions.disposeAll().finally(() => client.dispose()))
 
   registerPrompt(ctx)
   registerCatalogTools(ctx, api)
