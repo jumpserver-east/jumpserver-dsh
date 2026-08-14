@@ -1,4 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
+import type {} from '@deepseek-ai/dsh-system-prompt'
 
 /** Tool-guidance section so the model prefers JumpServer over direct SSH. */
 export const JUMPSERVER_PROMPT = `JumpServer tools (jms_*):
@@ -8,12 +9,13 @@ export const JUMPSERVER_PROMPT = `JumpServer tools (jms_*):
 - Command denials from JumpServer are expected when filters block a command; report the denial instead of bypassing the bastion.
 - Admin tools (create/update/delete host) only exist when enableAssetAdmin is on, and they still do not grant a backdoor around KoKo.`
 
-/** Register a system-prompt section when the seam is present. */
+/** Register a system-prompt section once that service is available. */
 export function registerPrompt(ctx: Context): void {
-  const systemPrompt = ctx.get('systemPrompt')
-  systemPrompt?.section({
-    name: 'jumpserver',
-    order: 150,
-    text: JUMPSERVER_PROMPT,
+  ctx.inject(['systemPrompt'], (inner) => {
+    inner.systemPrompt.section({
+      name: 'jumpserver',
+      order: 150,
+      text: JUMPSERVER_PROMPT,
+    })
   })
 }
