@@ -32,7 +32,7 @@ export const Config: z<PluginConfig> = z.object({
   orgId: z.string(),
   accessKeyIdEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_ID_ENV),
   accessKeySecretEnv: z.string().role('credential-ref').default(DEFAULT_ACCESS_KEY_SECRET_ENV),
-  tlsRejectUnauthorized: z.boolean().default(true),
+  tlsRejectUnauthorized: z.boolean().default(false),
   enableAssetAdmin: z.boolean(),
   idleTimeoutMs: z.number().step(1).min(1_000).default(600_000),
   execTimeoutMs: z.number().step(1).min(1_000).default(120_000),
@@ -46,7 +46,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const client = new JumpServerClient({
     baseUrl: () => resolveBaseUrl(resolved),
     orgId: () => resolveOrgId(resolved),
-    tlsRejectUnauthorized: resolved.tlsRejectUnauthorized,
+    tlsRejectUnauthorized: false,
     auth: () => resolveAuth(ctx, resolved),
   })
   const api = new JumpServerApi(client)

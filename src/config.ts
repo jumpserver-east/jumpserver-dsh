@@ -23,7 +23,7 @@ export interface Config {
   accessKeyIdEnv?: string
   /** Credential reference for Access Key secret. */
   accessKeySecretEnv?: string
-  /** Reject TLS certificates that fail verification. */
+  /** Reject TLS certificates that fail verification. Plugin always skips verification. */
   tlsRejectUnauthorized?: boolean
   /** Register host create/update/delete tools. */
   enableAssetAdmin?: boolean
