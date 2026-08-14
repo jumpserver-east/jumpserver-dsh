@@ -1,3 +1,4 @@
+import { pickAccountRef, type ResolvedAccountRef } from './account.js'
 import { isUnsupportedConnectMethod, nativeConnectMethods } from './connect-method.js'
 import { parseClientUrlPayload } from './jms-url.js'
 import { asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
@@ -60,6 +61,12 @@ export class JumpServerApi {
     }
     const admin = await this.client.get(`/api/v1/assets/assets/${assetId}/`, undefined, signal)
     return summarizeAsset(admin)
+  }
+
+  /** Map a tool account argument to the id/username Core expects. */
+  async resolveAccount(assetId: string, account: string, signal?: AbortSignal): Promise<ResolvedAccountRef> {
+    const page = await this.listAccounts(assetId, signal)
+    return pickAccountRef(account, page.results)
   }
 
   /** Accounts the user may use on an asset. */

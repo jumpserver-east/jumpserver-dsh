@@ -70,7 +70,7 @@ export function registerCatalogTools(ctx: Context, api: JumpServerApi): void {
 
   ctx.tools.register(defineTool({
     name: 'jms_list_accounts',
-    description: 'List JumpServer accounts the current user may use on an asset. Pass an account name or id to jms_connect.',
+    description: 'List JumpServer accounts the current user may use on an asset. Pass the account id or username to jms_connect.',
     parameters: {
       asset_id: { type: 'string', required: true, description: 'Asset UUID' },
     },

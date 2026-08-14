@@ -6,6 +6,7 @@ import type { ResolvedConfig } from './config.js'
 import { resolveBaseUrl } from './credentials.js'
 import { resolveKokoEndpoint } from './koko-endpoint.js'
 import { jsonOutput } from './render.js'
+import { JumpServerError } from './types.js'
 import type { SessionManager } from './sessions.js'
 
 const DEFAULT_PROTOCOL = 'ssh'
@@ -26,7 +27,7 @@ export function registerRuntimeTools(
     description: 'Create a JumpServer connection token and open an SSH session through KoKo to the asset. Always connect this way; never SSH to the asset address directly. Returns a session_id for jms_exec, jms_read_file, and jms_write_file.',
     parameters: {
       asset_id: { type: 'string', required: true, description: 'Asset UUID' },
-      account: { type: 'string', required: true, description: 'Account username or account UUID from jms_list_accounts' },
+      account: { type: 'string', required: true, description: 'Account UUID or username from jms_list_accounts. Do not use a display name when it differs from username.' },
       protocol: { type: 'string', description: 'Protocol, default ssh' },
       input_username: { type: 'string', description: 'Username when the account is @USER or @INPUT' },
     },
@@ -39,9 +40,14 @@ export function registerRuntimeTools(
     }),
     async execute(args, exec) {
       const protocol = args.protocol?.trim() || DEFAULT_PROTOCOL
+      const assetId = args.asset_id.trim()
+      const resolvedAccount = await api.resolveAccount(assetId, args.account, exec.signal)
+      if (resolvedAccount.inputUsernameRequired && !args.input_username?.trim()) {
+        throw new JumpServerError('account @USER or @INPUT requires input_username')
+      }
       const { token, client } = await api.createClientProtocol({
-        asset: args.asset_id.trim(),
-        account: args.account.trim(),
+        asset: assetId,
+        account: resolvedAccount.account,
         protocol,
         inputUsername: args.input_username,
       }, exec.signal)
@@ -51,8 +57,8 @@ export function registerRuntimeTools(
         port,
         username: `JMS-${client.token.id}`,
         password: client.token.value,
-        assetId: args.asset_id.trim(),
-        account: args.account.trim(),
+        assetId,
+        account: resolvedAccount.account,
         protocol,
       }, exec.signal)
       return asJson({
