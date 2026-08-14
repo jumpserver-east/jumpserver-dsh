@@ -80,6 +80,27 @@ describe('JumpServerClient', () => {
     })
   })
 
+  it('uses globalThis.fetch when tls verification is on', async () => {
+    const seen: string[] = []
+    const original = globalThis.fetch
+    globalThis.fetch = (async (url: string) => {
+      seen.push(String(url))
+      return new Response('{}', { status: 200 })
+    }) as typeof fetch
+    try {
+      const client = new JumpServerClient({
+        baseUrl: 'https://jms.example.com',
+        orgId: 'org',
+        tlsRejectUnauthorized: true,
+        auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
+      })
+      await client.get('/api/v1/users/profile/')
+      expect(seen).toEqual(['https://jms.example.com/api/v1/users/profile/'])
+    } finally {
+      globalThis.fetch = original
+    }
+  })
+
   it('returns undefined from getOrUndefined on 404', async () => {
     const client = new JumpServerClient({
       baseUrl: 'https://jms.example.com',

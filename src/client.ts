@@ -173,7 +173,9 @@ export class JumpServerClient {
 
   private async fetcher(): Promise<FetchLike> {
     if (this.fetchImpl) return this.fetchImpl
-    // Internal JumpServer cores commonly use a private CA or self-signed cert.
+    if (this.tlsRejectUnauthorized) {
+      return (url, init) => globalThis.fetch(url, init)
+    }
     if (!this.insecureFetch) {
       this.insecureFetch = await createInsecureFetch()
     }

@@ -46,7 +46,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
   const client = new JumpServerClient({
     baseUrl: () => resolveBaseUrl(resolved),
     orgId: () => resolveOrgId(resolved),
-    tlsRejectUnauthorized: false,
+    tlsRejectUnauthorized: resolved.tlsRejectUnauthorized,
     auth: () => resolveAuth(ctx, resolved),
   })
   const api = new JumpServerApi(client)

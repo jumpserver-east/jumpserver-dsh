@@ -142,7 +142,10 @@ Access Key 在 JumpServer「个人设置」里创建。跑 dsh 的这台机器�
       name: dsh-jumpserver
       config:
         baseUrl: https://jms.example.com
+        tlsRejectUnauthorized: true
 ```
+
+`tlsRejectUnauthorized` 默认 `false`（内网自签证书可连）。设为 `true` 时按系统 CA 校验 Core 的 HTTPS 证书。
 
 ## 使用
 
