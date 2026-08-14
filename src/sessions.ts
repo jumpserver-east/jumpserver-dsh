@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { Client, type SFTPWrapper } from 'ssh2'
+import { Ssh2DbConnection } from './db-session.js'
 import { formatNetworkError } from './errors.js'
+import { isDatabaseProtocol } from './protocol.js'
 import { JumpServerError } from './types.js'
 
 /** Result of one remote command. */
@@ -217,9 +219,12 @@ export class SessionManager {
   }
 }
 
-/** Open an ssh2 client to KoKo. */
+/** Open an ssh2 client to KoKo. Database tokens use a PTY; hosts use exec/SFTP. */
 export async function connectSsh2(input: OpenSessionInput, signal?: AbortSignal): Promise<SshConnection> {
   const client = await openClient(input, signal)
+  if (isDatabaseProtocol(input.protocol)) {
+    return Ssh2DbConnection.open(client, input.protocol, signal, input.readyTimeoutMs ?? 20_000)
+  }
   return new Ssh2Connection(client)
 }
 

@@ -5,7 +5,7 @@ import type { JumpServerApi } from './api.js'
 import type { ResolvedConfig } from './config.js'
 import { resolveBaseUrl, resolveEnableDbWrite } from './credentials.js'
 import { resolveKokoEndpoint } from './koko-endpoint.js'
-import { isDatabaseProtocol, pickAssetProtocol } from './protocol.js'
+import { isDatabaseProtocol, pickConnectProtocol } from './protocol.js'
 import { jsonOutput } from './render.js'
 import { assertSqlAllowed, classifySql } from './sql-kind.js'
 import { JumpServerError, type ClientProtocolData, type ConnectionTokenInfo } from './types.js'
@@ -28,7 +28,7 @@ export function registerRuntimeTools(
     parameters: {
       asset_id: { type: 'string', required: true, description: 'Asset UUID' },
       account: { type: 'string', required: true, description: 'Account UUID or username from jms_list_accounts. Do not use a display name when it differs from username.' },
-      protocol: { type: 'string', description: 'Protocol. Omit to use a database protocol on the asset, otherwise ssh. Examples: ssh, mysql, postgresql, redis.' },
+      protocol: { type: 'string', description: 'Protocol. Omit to use a database protocol on the asset (type/category), otherwise ssh. Examples: ssh, mysql, postgresql, oracle, sqlserver (mssql), redis.' },
       input_username: { type: 'string', description: 'Username when the account is @USER or @INPUT' },
     },
     output: jsonOutput,
@@ -310,12 +310,11 @@ async function resolveConnectProtocol(
   requested: string | undefined,
   signal?: AbortSignal,
 ): Promise<string> {
-  if (requested?.trim()) return requested.trim().toLowerCase()
   try {
     const asset = await api.getAsset(assetId, signal)
-    return pickAssetProtocol(asset.protocols)
+    return pickConnectProtocol(asset, requested)
   } catch {
-    return 'ssh'
+    return pickConnectProtocol({}, requested)
   }
 }
 

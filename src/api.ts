@@ -2,7 +2,7 @@ import { pickAccountRef, pickAccountRefDirect, type ResolvedAccountRef } from '.
 import { isUnsupportedConnectMethod, nativeConnectMethods } from './connect-method.js'
 import { parseClientUrlPayload } from './jms-url.js'
 import { asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
-import { isDatabaseProtocol } from './protocol.js'
+import { canonicalProtocol, isDatabaseProtocol } from './protocol.js'
 import { JumpServerError, type AccountSummary, type AssetSummary, type ConnectionTokenInfo, type KokoEndpoint, type ListPage } from './types.js'
 import type { JumpServerClient } from './client.js'
 import type { ClientProtocolData } from './types.js'
@@ -199,19 +199,28 @@ export class JumpServerApi {
     inputUsername?: string
     reusable?: boolean
   }, signal?: AbortSignal): Promise<{ token: ConnectionTokenInfo; client: ClientProtocolData }> {
-    const methods = nativeConnectMethods(input.protocol)
+    const protocol = canonicalProtocol(input.protocol)
+    const methods = nativeConnectMethods(protocol)
     let lastError: unknown
     const leftoverIds: string[] = []
     try {
       for (const [index, connectMethod] of methods.entries()) {
         try {
-          const token = await this.createConnectionToken({ ...input, connectMethod }, signal)
+          const token = await this.createConnectionToken({ ...input, protocol, connectMethod }, signal)
           leftoverIds.push(token.id)
+          if (isDatabaseProtocol(protocol) && token.value) {
+            leftoverIds.pop()
+            const endpoint = await this.resolveKokoSshEndpoint(signal)
+            return {
+              token: { ...token, protocol },
+              client: { token: { id: token.id, value: token.value }, endpoint, protocol },
+            }
+          }
           const client = await this.getClientProtocol(token.id, signal, token)
           leftoverIds.pop()
-          if (isDatabaseProtocol(input.protocol)) {
+          if (isDatabaseProtocol(protocol)) {
             const endpoint = await this.resolveKokoSshEndpoint(signal)
-            return { token, client: { ...client, endpoint, protocol: input.protocol } }
+            return { token: { ...token, protocol }, client: { ...client, endpoint, protocol } }
           }
           return { token, client }
         } catch (error) {

@@ -177,9 +177,9 @@ agent 会按需调用 `jms_*` 工具。不要让它直接 SSH 资产 IP。
 
 - `jms_whoami` — 确认当前 API 用户
 - `jms_list_assets` / `jms_get_asset` / `jms_list_accounts` / `jms_list_nodes`
-- `jms_connect` — 创建 connection-token，经 KoKo 建会话（用户名 `JMS-<token-id>`）。主机默认 SSH；数据库资产可省略 protocol，或显式传 `mysql` / `postgresql` / `redis` 等
-- `jms_exec` — 在主机上执行命令（可审计）。数据库会话上的写语句同样受 `JUMPSERVER_ENABLE_DB_WRITE` 约束
-- `jms_sql` — 在数据库会话上执行 SQL / Redis / Mongo 命令。未授权只能查询
+- `jms_connect` — 创建 connection-token，经 KoKo 建会话（用户名 `JMS-<token-id>`）。主机走 SSH exec；数据库走 KoKo PTY（usql），连不上库时这里就会失败。可省略 protocol（按资产 type/category 判断）；`mssql` 会当成 `sqlserver`
+- `jms_exec` — 在主机上执行命令（可审计）。不要用它跑数据库 SQL
+- `jms_sql` — 在已就绪的数据库 PTY 上执行 SQL / Redis / Mongo 命令。未授权只能查询
 - `jms_read_file` / `jms_write_file` — 经 KoKo 做 SFTP（仅主机会话）
 - `jms_list_sessions` / `jms_disconnect`
 

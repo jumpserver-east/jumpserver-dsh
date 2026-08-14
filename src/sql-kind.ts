@@ -1,4 +1,4 @@
-import { isDatabaseProtocol } from './protocol.js'
+import { canonicalProtocol, isDatabaseProtocol } from './protocol.js'
 import { JumpServerError } from './types.js'
 
 /** Whether a statement only reads data, or changes it. */
@@ -125,7 +125,7 @@ export function classifySql(sql: string, protocol = 'mysql'): SqlKind {
   if (statements.length === 0) {
     throw new JumpServerError('sql must be non-empty')
   }
-  const kind = protocol.trim().toLowerCase()
+  const kind = canonicalProtocol(protocol)
   return statements.some(statement => isWriteStatement(statement, kind)) ? 'write' : 'query'
 }
 

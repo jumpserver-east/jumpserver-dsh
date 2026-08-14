@@ -12,10 +12,11 @@ describe('nativeConnectMethods', () => {
     expect(nativeConnectMethods('sftp')).toEqual(['sftp_client'])
   })
 
-  it('maps database protocols to web_cli first, then SSH fallbacks', () => {
-    expect(nativeConnectMethods('mysql')).toEqual(['web_cli', 'ssh_client', 'ssh_guide'])
-    expect(nativeConnectMethods('PostgreSQL')).toEqual(['web_cli', 'ssh_client', 'ssh_guide'])
-    expect(nativeConnectMethods('redis')).toEqual(['web_cli', 'ssh_client', 'ssh_guide'])
+  it('maps database protocols to web_cli only (ssh_guide is not valid for them)', () => {
+    expect(nativeConnectMethods('mysql')).toEqual(['web_cli'])
+    expect(nativeConnectMethods('PostgreSQL')).toEqual(['web_cli'])
+    expect(nativeConnectMethods('mssql')).toEqual(['web_cli'])
+    expect(nativeConnectMethods('oracle')).toEqual(['web_cli'])
   })
 })
 

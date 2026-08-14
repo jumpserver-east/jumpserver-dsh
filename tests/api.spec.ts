@@ -130,22 +130,17 @@ describe('createClientProtocol', () => {
     expect(calls.some(call => call.method === 'PATCH' && call.url.includes('/tok-1/expire/'))).toBe(true)
   })
 
-  it('uses web_cli for mysql and replaces the HTTP endpoint with KoKo SSH', async () => {
+  it('uses web_cli for mysql and KoKo SSH without calling client-url when value is present', async () => {
     const methods: string[] = []
-    const url = encodeJms({
-      token: { id: 'tok-db', value: 'secret' },
-      endpoint: { host: 'koko.example.com', port: 5000 },
-    })
+    const seen: string[] = []
     const api = apiWith((href, init) => {
+      seen.push(href)
       const method = (init.method ?? 'GET').toUpperCase()
       if (method === 'POST' && href.endsWith('/authentication/connection-token/')) {
         const body = JSON.parse(String(init.body)) as { connect_method: string; protocol: string }
         methods.push(body.connect_method)
         expect(body.protocol).toBe('mysql')
         return new Response(JSON.stringify({ id: 'tok-db', value: 'secret', protocol: 'mysql' }), { status: 201 })
-      }
-      if (href.includes('/client-url/')) {
-        return new Response(JSON.stringify({ url }), { status: 200 })
       }
       if (href.includes('/terminal/endpoints/')) {
         return new Response(JSON.stringify({
@@ -161,8 +156,31 @@ describe('createClientProtocol', () => {
       protocol: 'mysql',
     })
     expect(methods[0]).toBe('web_cli')
+    expect(seen.some(href => href.includes('/client-url/'))).toBe(false)
     expect(result.client.endpoint).toEqual({ host: 'koko.example.com', port: 2222 })
     expect(result.client.token).toEqual({ id: 'tok-db', value: 'secret' })
+  })
+
+  it('sends sqlserver to Core when the caller says mssql', async () => {
+    let protocol = ''
+    const api = apiWith((href, init) => {
+      const method = (init.method ?? 'GET').toUpperCase()
+      if (method === 'POST' && href.endsWith('/authentication/connection-token/')) {
+        protocol = (JSON.parse(String(init.body)) as { protocol: string }).protocol
+        return new Response(JSON.stringify({ id: 'tok-db', value: 'secret', protocol: 'sqlserver' }), { status: 201 })
+      }
+      if (href.includes('/terminal/endpoints/')) {
+        return new Response(JSON.stringify({ results: [{ host: 'koko.example.com', ssh_port: 2222 }] }), { status: 200 })
+      }
+      return new Response('nope', { status: 404 })
+    })
+    const result = await api.createClientProtocol({
+      asset: 'db-1',
+      account: 'sa',
+      protocol: 'mssql',
+    })
+    expect(protocol).toBe('sqlserver')
+    expect(result.token.protocol).toBe('sqlserver')
   })
 })
 
