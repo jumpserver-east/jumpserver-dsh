@@ -285,14 +285,23 @@ export class Ssh2Connection implements SshConnection {
         const stdout = new CappedBuffer(opts.maxBytes)
         const stderr = new CappedBuffer(opts.maxBytes)
         let settled = false
+        let stdoutClosed = false
+        let stderrClosed = false
+        let exitCode: number | null | undefined
+        let signalName: string | undefined
+        const result = (): ExecResult => ({
+          exitCode: typeof exitCode === 'number' ? exitCode : null,
+          ...(signalName ? { signal: signalName } : {}),
+          stdout: stdout.toString(),
+          stderr: stderr.toString(),
+          truncated: stdout.truncated || stderr.truncated,
+        })
+        const tryFinish = () => {
+          if (!stdoutClosed || !stderrClosed) return
+          finish(undefined, result())
+        }
         const timer = setTimeout(() => {
-          finish(undefined, {
-            exitCode: null,
-            stdout: stdout.toString(),
-            stderr: stderr.toString(),
-            truncated: stdout.truncated || stderr.truncated,
-            timedOut: true,
-          })
+          finish(undefined, { ...result(), timedOut: true })
           stream.destroy()
         }, opts.timeoutMs)
         const onAbort = () => {
@@ -315,16 +324,20 @@ export class Ssh2Connection implements SshConnection {
         opts.signal?.addEventListener('abort', onAbort, { once: true })
         stream.on('data', (chunk: Buffer) => stdout.push(chunk))
         stream.stderr.on('data', (chunk: Buffer) => stderr.push(chunk))
-        stream.on('close', (code: number | null, signalName?: string) => {
-          finish(undefined, {
-            exitCode: typeof code === 'number' ? code : null,
-            ...(signalName ? { signal: signalName } : {}),
-            stdout: stdout.toString(),
-            stderr: stderr.toString(),
-            truncated: stdout.truncated || stderr.truncated,
-          })
+        stream.on('close', (code: number | null, name?: string) => {
+          exitCode = code
+          signalName = name
+          stdoutClosed = true
+          tryFinish()
         })
+        const onStderrDone = () => {
+          stderrClosed = true
+          tryFinish()
+        }
+        stream.stderr.on('end', onStderrDone)
+        stream.stderr.on('close', onStderrDone)
         stream.on('error', (streamError: Error) => finish(streamError))
+        stream.stderr.on('error', (streamError: Error) => finish(streamError))
       })
     })
   }

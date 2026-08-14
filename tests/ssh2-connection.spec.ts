@@ -94,6 +94,24 @@ describe('Ssh2Connection.exec exit code', () => {
     expect(result.stderr).toBe('partial-err')
     expect(result.exitCode).toBeNull()
   })
+
+  it('waits for a late stderr chunk before settling', async () => {
+    const conn = await openAgainst(servers, conns, (session) => {
+      session.on('exec', (accept) => {
+        const stream = accept()
+        stream.write('out')
+        stream.exit(0)
+        setImmediate(() => {
+          stream.stderr.write('late')
+          stream.end()
+        })
+      })
+    })
+    const result = await conn.exec('late-err', { timeoutMs: 2_000, maxBytes: 4_096 })
+    expect(result.stdout).toBe('out')
+    expect(result.stderr).toBe('late')
+    expect(result.exitCode).toBe(0)
+  })
 })
 
 function fakeClient(sftp: Client['sftp']): Client {
