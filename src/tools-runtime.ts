@@ -182,9 +182,7 @@ export function registerRuntimeTools(
     output: jsonOutput,
     presentCall: args => ({ card: 'generic', title: `Disconnect ${args.session_id}`, kind: 'other' }),
     async execute(args, exec) {
-      const result = await sessions.disconnect(args.session_id, exec.signal)
-      if (result.token_id) await api.expireConnectionToken(result.token_id)
-      return result
+      return await sessions.disconnect(args.session_id, exec.signal)
     },
   }))
 }

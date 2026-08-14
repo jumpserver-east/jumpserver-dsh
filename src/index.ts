@@ -55,6 +55,7 @@ export function apply(ctx: Context, config: PluginConfig): void {
     execTimeoutMs: resolved.execTimeoutMs,
     outputMaxBytes: resolved.outputMaxBytes,
     writeMaxBytes: resolved.writeMaxBytes,
+    onClosed: tokenId => api.expireConnectionToken(tokenId),
   })
 
   ctx.effect(() => () => sessions.disposeAll().finally(() => client.dispose()))
