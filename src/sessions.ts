@@ -455,7 +455,7 @@ export class Ssh2Connection implements SshConnection {
           // Ignore a second teardown.
         }
         this.closed = true
-        resolve()
+        done()
       }, SSH_END_TIMEOUT_MS)
       if (signal?.aborted) {
         onAbort()
