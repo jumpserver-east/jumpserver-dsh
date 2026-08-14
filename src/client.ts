@@ -47,7 +47,7 @@ export function buildRequestUrl(
   return url
 }
 
-/** Path used as HTTP Signature `(request-target)` ??pathname plus query. */
+/** Path used as HTTP Signature `(request-target)`: pathname plus query. */
 export function signingPath(url: URL): string {
   return `${url.pathname}${url.search}`
 }

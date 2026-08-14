@@ -31,7 +31,7 @@ export interface CreateHostInput {
 export class JumpServerApi {
   constructor(private readonly client: JumpServerClient) {}
 
-  /** Current user profile ù?useful to verify auth and org. */
+  /** Current user profile -- useful to verify auth and org. */
   async profile(signal?: AbortSignal): Promise<unknown> {
     return this.client.get('/api/v1/users/profile/', undefined, signal)
   }
