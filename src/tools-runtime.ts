@@ -6,7 +6,6 @@ import type { ResolvedConfig } from './config.js'
 import { jsonOutput } from './render.js'
 import type { SessionManager } from './sessions.js'
 
-const SSH_CONNECT_METHOD = 'ssh'
 const DEFAULT_PROTOCOL = 'ssh'
 
 function asJson(value: unknown): JsonValue {
@@ -38,14 +37,12 @@ export function registerRuntimeTools(
     }),
     async execute(args, exec) {
       const protocol = args.protocol?.trim() || DEFAULT_PROTOCOL
-      const token = await api.createConnectionToken({
+      const { token, client } = await api.createClientProtocol({
         asset: args.asset_id.trim(),
         account: args.account.trim(),
         protocol,
-        connectMethod: SSH_CONNECT_METHOD,
         inputUsername: args.input_username,
       }, exec.signal)
-      const client = await api.getClientProtocol(token.id, exec.signal)
       const host = client.endpoint.host
       const port = client.endpoint.port
       const info = await sessions.open({

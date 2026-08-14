@@ -1,3 +1,4 @@
+import { isUnsupportedConnectMethod, nativeConnectMethods } from './connect-method.js'
 import { parseClientUrlPayload } from './jms-url.js'
 import { asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
 import { JumpServerError, type AccountSummary, type AssetSummary, type ConnectionTokenInfo, type ListPage } from './types.js'
@@ -29,7 +30,7 @@ export interface CreateHostInput {
 export class JumpServerApi {
   constructor(private readonly client: JumpServerClient) {}
 
-  /** Current user profile ‚Ä?useful to verify auth and org. */
+  /** Current user profile ù?useful to verify auth and org. */
   async profile(signal?: AbortSignal): Promise<unknown> {
     return this.client.get('/api/v1/users/profile/', undefined, signal)
   }
@@ -160,6 +161,33 @@ export class JumpServerApi {
       signal,
     )
     return parseClientUrlPayload(body)
+  }
+
+  /**
+   * Create a token with a native KoKo connect_method and resolve client-url.
+   * Retries ssh_guide if ssh_client is rejected.
+   */
+  async createClientProtocol(input: {
+    asset: string
+    account: string
+    protocol: string
+    inputUsername?: string
+    reusable?: boolean
+  }, signal?: AbortSignal): Promise<{ token: ConnectionTokenInfo; client: ClientProtocolData }> {
+    const methods = nativeConnectMethods(input.protocol)
+    let lastError: unknown
+    for (const [index, connectMethod] of methods.entries()) {
+      try {
+        const token = await this.createConnectionToken({ ...input, connectMethod }, signal)
+        const client = await this.getClientProtocol(token.id, signal)
+        return { token, client }
+      } catch (error) {
+        lastError = error
+        const canRetry = isUnsupportedConnectMethod(error) && index < methods.length - 1
+        if (!canRetry) throw error
+      }
+    }
+    throw lastError
   }
 }
 

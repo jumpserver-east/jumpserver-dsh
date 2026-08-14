@@ -103,6 +103,7 @@ export class JumpServerClient {
       Accept: 'application/json',
       Date: date,
       'X-JMS-ORG': this.resolveOrgId(),
+      'User-Agent': requestUserAgent(),
     }
     let body: string | undefined
     if (spec.body !== undefined) {
@@ -214,6 +215,16 @@ function formatError(parsed: unknown, text: string): string {
   }
   if (typeof parsed === 'string' && parsed.length > 0) return parsed
   return text || 'unknown error'
+}
+
+/** JumpServer maps User-Agent to windows/mac/linux when resolving connect methods. */
+function requestUserAgent(): string {
+  const platform = process.platform === 'darwin'
+    ? 'Macintosh; Intel Mac OS X'
+    : process.platform === 'win32'
+      ? 'Windows NT 10.0'
+      : 'Linux x86_64'
+  return `dsh-jumpserver/0.1.0 (${platform})`
 }
 
 async function createInsecureFetch(): Promise<FetchLike> {
