@@ -66,6 +66,7 @@ interface LiveSession {
   info: SessionInfo
   connection: SshConnection
   timer: ReturnType<typeof setTimeout>
+  inFlight: number
 }
 
 /** Holds KoKo SSH sessions for `jms_exec` / SFTP tools. */
@@ -94,12 +95,11 @@ export class SessionManager {
     const live: LiveSession = {
       info,
       connection,
-      timer: setTimeout(() => {
-        void this.disconnect(info.session_id)
-      }, this.options.idleTimeoutMs),
+      timer: setTimeout(() => undefined, this.options.idleTimeoutMs),
+      inFlight: 0,
     }
-    live.timer.unref?.()
     this.sessions.set(info.session_id, live)
+    this.scheduleIdle(live)
     connection.onClose(() => {
       const current = this.sessions.get(info.session_id)
       if (!current) return
@@ -112,22 +112,18 @@ export class SessionManager {
   /** Run a command on an existing session. */
   async exec(sessionId: string, command: string, signal?: AbortSignal): Promise<ExecResult & { session_id: string; command: string }> {
     const live = this.require(sessionId)
-    this.touch(live)
-    const result = await live.connection.exec(command, {
+    const result = await this.withBusy(live, () => live.connection.exec(command, {
       signal,
       timeoutMs: this.options.execTimeoutMs,
       maxBytes: this.options.outputMaxBytes,
-    })
-    this.touch(live)
+    }))
     return { session_id: sessionId, command, ...result }
   }
 
   /** Read a remote file over SFTP. */
   async readFile(sessionId: string, remotePath: string): Promise<FileReadResult & { session_id: string }> {
     const live = this.require(sessionId)
-    this.touch(live)
-    const result = await live.connection.readFile(remotePath, this.options.outputMaxBytes)
-    this.touch(live)
+    const result = await this.withBusy(live, () => live.connection.readFile(remotePath, this.options.outputMaxBytes))
     return { session_id: sessionId, ...result }
   }
 
@@ -140,9 +136,7 @@ export class SessionManager {
         `write exceeds writeMaxBytes (${data.byteLength} > ${this.options.writeMaxBytes})`,
       )
     }
-    this.touch(live)
-    await live.connection.writeFile(remotePath, data)
-    this.touch(live)
+    await this.withBusy(live, () => live.connection.writeFile(remotePath, data))
     return { session_id: sessionId, path: remotePath, byteLength: data.byteLength }
   }
 
@@ -175,9 +169,23 @@ export class SessionManager {
     return live
   }
 
-  private touch(live: LiveSession): void {
+  private async withBusy<T>(live: LiveSession, work: () => Promise<T>): Promise<T> {
+    live.inFlight += 1
+    try {
+      return await work()
+    } finally {
+      live.inFlight -= 1
+      if (this.sessions.get(live.info.session_id) === live) this.scheduleIdle(live)
+    }
+  }
+
+  private scheduleIdle(live: LiveSession): void {
     clearTimeout(live.timer)
     live.timer = setTimeout(() => {
+      if (live.inFlight > 0) {
+        this.scheduleIdle(live)
+        return
+      }
       void this.disconnect(live.info.session_id)
     }, this.options.idleTimeoutMs)
     live.timer.unref?.()

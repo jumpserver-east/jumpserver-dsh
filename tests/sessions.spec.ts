@@ -82,6 +82,26 @@ describe('SessionManager', () => {
     })
   })
 
+  it('does not idle-disconnect while a command is running', async () => {
+    const conn = fakeConnection()
+    conn.exec = async (command) => {
+      await new Promise(resolve => setTimeout(resolve, 40))
+      return { exitCode: 0, stdout: `ok:${command}`, stderr: '', truncated: false }
+    }
+    const manager = new SessionManager({
+      idleTimeoutMs: 15,
+      execTimeoutMs: 5_000,
+      outputMaxBytes: 1024,
+      writeMaxBytes: 1024,
+      connect: async () => conn,
+    })
+    const info = await manager.open(input())
+    const result = await manager.exec(info.session_id, 'sleep')
+    expect(result.stdout).toBe('ok:sleep')
+    expect(manager.list()).toHaveLength(1)
+    await manager.disposeAll()
+  })
+
   it('rejects oversized writes', async () => {
     const manager = new SessionManager({
       idleTimeoutMs: 60_000,
