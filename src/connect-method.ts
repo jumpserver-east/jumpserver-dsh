@@ -18,9 +18,25 @@ export function nativeConnectMethods(protocol: string): readonly string[] {
   return NATIVE_CONNECT_METHODS[key] ?? DEFAULT_CONNECT_METHODS
 }
 
+const UNSUPPORTED_CONNECT_METHOD = /connect method not support|连接方式不支持/i
+
 /** True when Core rejected the token's connect_method during client-url lookup. */
 export function isUnsupportedConnectMethod(error: unknown): boolean {
   if (!(error instanceof JumpServerError)) return false
   if (error.status !== 400) return false
-  return /connect method not support/i.test(error.message)
+  return collectErrorTexts(error).some(text => UNSUPPORTED_CONNECT_METHOD.test(text))
+}
+
+function collectErrorTexts(error: JumpServerError): string[] {
+  const texts = [error.message]
+  if (error.body !== null && typeof error.body === 'object' && !Array.isArray(error.body)) {
+    const row = error.body as Record<string, unknown>
+    for (const key of ['detail', 'error', 'msg'] as const) {
+      const value = row[key]
+      if (typeof value === 'string' && value.length > 0) texts.push(value)
+    }
+  } else if (typeof error.body === 'string' && error.body.length > 0) {
+    texts.push(error.body)
+  }
+  return texts
 }

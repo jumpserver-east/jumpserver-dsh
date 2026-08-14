@@ -42,6 +42,7 @@ describe('JumpServerClient', () => {
     const headers = new Headers(seen[0]!.init.headers)
     expect(headers.get('X-JMS-ORG')).toBe('00000000-0000-0000-0000-000000000002')
     expect(headers.get('Accept')).toBe('application/json')
+    expect(headers.get('Accept-Language')).toBe('en')
     expect(headers.get('Date')).toBe('Tue, 15 Nov 1994 08:12:31 GMT')
     expect(headers.get('Authorization')).toMatch(/^Signature keyId="kid",algorithm="hmac-sha256"/)
     expect(headers.get('User-Agent')).toMatch(/dsh-jumpserver\/0\.1\.0/)

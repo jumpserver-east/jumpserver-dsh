@@ -23,6 +23,15 @@ describe('isUnsupportedConnectMethod', () => {
     expect(isUnsupportedConnectMethod(error)).toBe(true)
   })
 
+  it('matches a zh-hans Core detail even when the wrapper message is generic', () => {
+    const error = new JumpServerError(
+      'JumpServer GET /api/v1/authentication/connection-token/x/client-url/ failed (400): 连接方式不支持: ssh_client',
+      400,
+      { detail: '连接方式不支持: ssh_client' },
+    )
+    expect(isUnsupportedConnectMethod(error)).toBe(true)
+  })
+
   it('ignores other failures', () => {
     expect(isUnsupportedConnectMethod(new JumpServerError('账号未找到', 400))).toBe(false)
     expect(isUnsupportedConnectMethod(new Error('Connect method not support: ssh'))).toBe(false)

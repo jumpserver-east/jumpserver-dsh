@@ -106,6 +106,7 @@ export class JumpServerClient {
     const date = httpDate(this.now())
     const headers: Record<string, string> = {
       Accept: 'application/json',
+      'Accept-Language': 'en',
       Date: date,
       'X-JMS-ORG': this.resolveOrgId(),
       'User-Agent': requestUserAgent(),
