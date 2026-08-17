@@ -36,6 +36,7 @@ export interface AssetSummary {
   protocols?: unknown
   nodes?: unknown
   org_name?: string
+  accounts?: AccountSummary[]
 }
 
 /** Normalized account shown to the model. */
@@ -43,6 +44,7 @@ export interface AccountSummary {
   id?: string
   name?: string
   username?: string
+  alias?: string
   secret_type?: string
   privileged?: boolean
   is_active?: boolean

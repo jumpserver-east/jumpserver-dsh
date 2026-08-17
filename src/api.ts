@@ -1,7 +1,7 @@
 import { pickAccountRef, pickAccountRefDirect, type ResolvedAccountRef } from './account.js'
 import { isUnsupportedConnectMethod, nativeConnectMethods } from './connect-method.js'
 import { parseClientUrlPayload } from './jms-url.js'
-import { asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
+import { accountsFromAssetPayload, asRecord, summarizeAccount, summarizeAsset, unwrapList } from './normalize.js'
 import { canonicalProtocol, isDatabaseProtocol } from './protocol.js'
 import { JumpServerError, type AccountSummary, type AssetSummary, type ConnectionTokenInfo, type KokoEndpoint, type ListPage } from './types.js'
 import type { JumpServerClient } from './client.js'
@@ -58,6 +58,7 @@ export class JumpServerApi {
       `/api/v1/perms/users/self/assets/${assetId}/`,
       undefined,
       signal,
+      [403, 404],
     )
     if (permed !== undefined && looksLikeAsset(permed)) {
       return summarizeAsset(permed)
@@ -76,21 +77,51 @@ export class JumpServerApi {
 
   /** Accounts the user may use on an asset. */
   async listAccounts(assetId: string, signal?: AbortSignal): Promise<ListPage<AccountSummary>> {
-    const permed = await this.client.getOrUndefined(
+    const miss = [403, 404] as const
+    const asset = await this.client.getOrUndefined(
+      `/api/v1/perms/users/self/assets/${assetId}/`,
+      undefined,
+      signal,
+      miss,
+    )
+    const fromAsset = accountsFromAssetPayload(asset)
+    if (fromAsset) return fromAsset
+
+    const listed = await this.client.getOrUndefined(
       `/api/v1/perms/users/self/assets/${assetId}/accounts/`,
       undefined,
       signal,
+      miss,
     )
-    if (permed !== undefined && isListPayload(permed)) {
-      return unwrapList(permed, summarizeAccount)
+    if (listed !== undefined && isListPayload(listed)) {
+      return unwrapList(listed, summarizeAccount)
     }
-    const admin = await this.client.get('/api/v1/accounts/accounts/', { asset: assetId, limit: 100 }, signal)
-    return unwrapList(admin, summarizeAccount)
+
+    const admin = await this.client.getOrUndefined(
+      '/api/v1/accounts/accounts/',
+      { asset: assetId, limit: 100 },
+      signal,
+      miss,
+    )
+    if (admin !== undefined && isListPayload(admin)) {
+      return unwrapList(admin, summarizeAccount)
+    }
+
+    throw new JumpServerError(
+      `JumpServer did not return permitted accounts for asset ${assetId}. `
+      + 'Ordinary users get accounts from GET /api/v1/perms/users/self/assets/{id}/ (permed_accounts), '
+      + 'not from the admin accounts API.',
+    )
   }
 
   /** Nodes the current user can see. */
   async listNodes(signal?: AbortSignal): Promise<ListPage<Record<string, unknown>>> {
-    const permed = await this.client.getOrUndefined('/api/v1/perms/users/self/nodes/', undefined, signal)
+    const permed = await this.client.getOrUndefined(
+      '/api/v1/perms/users/self/nodes/',
+      undefined,
+      signal,
+      [403, 404],
+    )
     if (permed !== undefined && isListPayload(permed)) {
       return unwrapList(permed, asRecord)
     }

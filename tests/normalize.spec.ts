@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { unwrapList, summarizeAsset, summarizeAccount } from '../src/normalize.js'
+import { unwrapList, summarizeAsset, summarizeAccount, accountsFromAssetPayload } from '../src/normalize.js'
 import { parseJmsUrl } from '../src/jms-url.js'
 
 describe('unwrapList', () => {
@@ -13,6 +13,23 @@ describe('unwrapList', () => {
     const page = unwrapList([{ id: 'a', username: 'root' }], summarizeAccount)
     expect(page.count).toBe(1)
     expect(page.results[0]?.username).toBe('root')
+  })
+})
+
+describe('accountsFromAssetPayload', () => {
+  it('reads permed_accounts and ignores admin-style accounts', () => {
+    expect(accountsFromAssetPayload({
+      id: 'asset-1',
+      accounts: [{ username: 'hidden-admin' }],
+      permed_accounts: [{ id: 'acc-1', username: 'root', alias: 'root' }],
+    })).toEqual({
+      count: 1,
+      results: [{ id: 'acc-1', username: 'root', alias: 'root' }],
+    })
+  })
+
+  it('returns undefined when permed_accounts is absent', () => {
+    expect(accountsFromAssetPayload({ id: 'asset-1', name: 'web' })).toBeUndefined()
   })
 })
 

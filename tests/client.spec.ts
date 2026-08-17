@@ -134,6 +134,18 @@ describe('JumpServerClient', () => {
     })
     await expect(client.getOrUndefined('/api/v1/missing/')).resolves.toBeUndefined()
   })
+
+  it('returns undefined from getOrUndefined when the status is allowed', async () => {
+    const client = new JumpServerClient({
+      baseUrl: 'https://jms.example.com',
+      orgId: 'org',
+      tlsRejectUnauthorized: true,
+      auth: async () => ({ accessKeyId: 'kid', accessKeySecret: 'secret' }),
+      fetchImpl: async () => new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 }),
+    })
+    await expect(client.getOrUndefined('/api/v1/accounts/accounts/', undefined, undefined, [403, 404]))
+      .resolves.toBeUndefined()
+  })
 })
 
 describe('JumpServerError', () => {

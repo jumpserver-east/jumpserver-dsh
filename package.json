@@ -1,6 +1,6 @@
 {
   "name": "@jumpserver-east/jumpserver-dsh",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "DeepSeek Harness plugin: manage JumpServer assets and operate on them through KoKo",
   "license": "MIT",
   "author": "lettimepassby <86416409@qq.com>",

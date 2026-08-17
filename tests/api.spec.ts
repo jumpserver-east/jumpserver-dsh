@@ -25,6 +25,73 @@ describe('createConnectionToken', () => {
   })
 })
 
+describe('listAccounts', () => {
+  it('reads permed_accounts from the user asset detail', async () => {
+    const seen: string[] = []
+    const api = apiWith((url) => {
+      seen.push(url)
+      if (url.includes('/perms/users/self/assets/asset-1/') && !url.includes('/accounts/')) {
+        return new Response(JSON.stringify({
+          id: 'asset-1',
+          name: 'jumpserver-v4',
+          address: '10.0.0.8',
+          permed_accounts: [
+            { id: '80f9752d-a628-4ac0-8e1f-c418bc7c0568', name: 'root', username: 'root', alias: 'root' },
+            { id: '@USER', name: '@USER', username: '@USER', alias: '@USER' },
+          ],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 })
+    })
+    await expect(api.listAccounts('asset-1')).resolves.toEqual({
+      count: 2,
+      results: [
+        { id: '80f9752d-a628-4ac0-8e1f-c418bc7c0568', name: 'root', username: 'root', alias: 'root' },
+        { id: '@USER', name: '@USER', username: '@USER', alias: '@USER' },
+      ],
+    })
+    expect(seen.some(url => url.includes('/accounts/accounts/'))).toBe(false)
+  })
+
+  it('does not fall through to the admin accounts API when permed_accounts is empty', async () => {
+    const api = apiWith((url) => {
+      if (url.includes('/perms/users/self/assets/asset-1/') && !url.includes('/accounts/')) {
+        return new Response(JSON.stringify({
+          id: 'asset-1',
+          name: 'jumpserver-v4',
+          address: '10.0.0.8',
+          permed_accounts: [],
+        }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 })
+    })
+    await expect(api.listAccounts('asset-1')).resolves.toEqual({ count: 0, results: [] })
+  })
+
+  it('uses the later /accounts/ subpath when the asset detail has no permed_accounts', async () => {
+    const api = apiWith((url) => {
+      if (url.includes('/assets/asset-1/accounts/')) {
+        return new Response(JSON.stringify([
+          { id: 'acc-1', username: 'root' },
+        ]), { status: 200 })
+      }
+      if (url.includes('/perms/users/self/assets/asset-1/')) {
+        return new Response(JSON.stringify({ id: 'asset-1', name: 'web' }), { status: 200 })
+      }
+      return new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 })
+    })
+    await expect(api.listAccounts('asset-1')).resolves.toEqual({
+      count: 1,
+      results: [{ id: 'acc-1', username: 'root' }],
+    })
+  })
+
+  it('explains the 403 instead of treating the admin accounts API as the user path', async () => {
+    const api = apiWith(() => new Response(JSON.stringify({ detail: 'no permission' }), { status: 403 }))
+    await expect(api.listAccounts('asset-1')).rejects.toThrow(/permed_accounts/)
+  })
+})
+
 describe('resolveAccount', () => {
   it('does not list accounts for a UUID, even if listing would 403', async () => {
     const seen: string[] = []

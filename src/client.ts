@@ -168,14 +168,15 @@ export class JumpServerClient {
     await this.request({ method: 'DELETE', path, signal })
   }
 
-  /** GET that returns undefined on 404 instead of throwing. */
+  /** GET that returns undefined on 404 (and any extra `allowStatuses`) instead of throwing. */
   async getOrUndefined<T = unknown>(
     path: string,
     query?: Record<string, string | number | boolean | undefined>,
     signal?: AbortSignal,
+    allowStatuses: readonly number[] = [404],
   ): Promise<T | undefined> {
     const { status, body, path: signedPath, text } = await this.requestRaw({ method: 'GET', path, query, signal })
-    if (status === 404) return undefined
+    if (allowStatuses.includes(status)) return undefined
     if (status >= 400) {
       throw new JumpServerError(
         `JumpServer GET ${signedPath} failed (${status}): ${formatError(body, text)}`,

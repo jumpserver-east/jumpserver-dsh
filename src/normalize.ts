@@ -16,6 +16,7 @@ export function summarizeAsset(raw: unknown): AssetSummary {
     ...optionalUnknown(row, 'protocols'),
     ...optionalUnknown(row, 'nodes'),
     ...optionalString(row, 'org_name'),
+    ...optionalAccounts(row),
   }
 }
 
@@ -27,10 +28,23 @@ export function summarizeAccount(raw: unknown): AccountSummary {
     ...optionalString(row, 'id'),
     ...optionalString(row, 'name'),
     ...(typeof username === 'string' ? { username } : {}),
+    ...optionalString(row, 'alias'),
     ...optionalString(row, 'secret_type'),
     ...optionalBoolean(row, 'privileged'),
     ...optionalBoolean(row, 'is_active'),
   }
+}
+
+/**
+ * v3.10 / v4.10 put permitted accounts on the user asset detail as
+ * `permed_accounts`. There is no `/assets/{id}/accounts/` route on those LTS
+ * releases; the admin `/accounts/accounts/` API is a different permission.
+ */
+export function accountsFromAssetPayload(body: unknown): ListPage<AccountSummary> | undefined {
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) return undefined
+  const raw = (body as Record<string, unknown>).permed_accounts
+  if (!Array.isArray(raw)) return undefined
+  return unwrapList(raw, summarizeAccount)
 }
 
 /**
@@ -81,4 +95,12 @@ function optionalUnknown(
 ): Record<string, never> | { [k: string]: unknown } {
   if (!(key in row)) return {}
   return { [key]: row[key] }
+}
+
+function optionalAccounts(
+  row: Record<string, unknown>,
+): Record<string, never> | { accounts: AccountSummary[] } {
+  const page = accountsFromAssetPayload(row)
+  if (!page) return {}
+  return { accounts: page.results }
 }
