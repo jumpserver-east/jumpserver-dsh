@@ -263,7 +263,7 @@ function requestUserAgent(): string {
     : process.platform === 'win32'
       ? 'Windows NT 10.0'
       : 'Linux x86_64'
-  return `dsh-jumpserver/${PACKAGE_VERSION} (${platform})`
+  return `jumpserver-dsh/${PACKAGE_VERSION} (${platform})`
 }
 
 async function createInsecureFetch(): Promise<{ fetch: FetchLike; agent: { close(): void } }> {

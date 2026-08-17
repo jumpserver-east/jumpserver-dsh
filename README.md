@@ -1,4 +1,4 @@
-# dsh-jumpserver
+# jumpserver-dsh
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 插件：让 agent 通过 [JumpServer](https://github.com/jumpserver/jumpserver) 管理资产，并**经 KoKo 堡垒**在资产上执行命令 / 读写文件。流量不直连资产 IP，命令过滤、ACL、会话审计仍然生效。
 
@@ -40,7 +40,7 @@ pnpm 会把仓库拉到临时目录，先跑插件自己的 `pnpm install`，再
 
 ```yaml
 allowBuilds:
-  dsh-jumpserver: true
+  jumpserver-dsh: true
 ```
 
    若打印的是带 tarball URL 的长 key，按它原样加一行。
@@ -69,21 +69,21 @@ dsh plugin --profile web add .
 ```json
 {
   "dependencies": {
-    "dsh-jumpserver": "link:/绝对路径/jumpserver-dsh"
+    "jumpserver-dsh": "link:/绝对路径/jumpserver-dsh"
   },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
-        "dsh-jumpserver"
+        "jumpserver-dsh"
       ]
     }
   }
 }
 ```
 
-`dsh plugin add` 会自己核对 `bundles`。若命令很慢或中途失败，可以在 profile 目录直接 link，再把 `dsh-jumpserver` 写进 `dsh.profile.bundles`：
+`dsh plugin add` 会自己核对 `bundles`。若命令很慢或中途失败，可以在 profile 目录直接 link，再把 `jumpserver-dsh` 写进 `dsh.profile.bundles`：
 
 ```sh
 cd ~/.dsh/profiles/web
@@ -96,7 +96,7 @@ profile 的 `pnpm-workspace.yaml` 建议至少有：
 
 ```yaml
 allowBuilds:
-  dsh-jumpserver: true
+  jumpserver-dsh: true
 ```
 
 若 pnpm 提示忽略了 `ssh2` 的构建脚本，再加上 `ssh2: true`（以及它依赖的 `cpu-features`）。
@@ -141,7 +141,7 @@ Access Key 在 JumpServer「个人设置」里创建。跑 dsh 的这台机器�
 ```yaml
 - update:
     - id: jumpserver
-      name: dsh-jumpserver
+      name: jumpserver-dsh
       config:
         baseUrl: https://jms.example.com
         tlsRejectUnauthorized: true

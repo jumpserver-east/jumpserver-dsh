@@ -1,6 +1,6 @@
 /**
  * DeepSeek Harness plugin: manage JumpServer assets and operate on them through KoKo.
- * @module dsh-jumpserver
+ * @module jumpserver-dsh
  */
 
 import type { Context } from '@deepseek-ai/cordis'
