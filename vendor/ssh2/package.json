@@ -1,0 +1,14 @@
+{
+  "name": "ssh2",
+  "version": "1.17.0",
+  "description": "Vendored ssh2 without native install scripts (JS crypto fallback).",
+  "license": "MIT",
+  "main": "./lib/index.js",
+  "engines": {
+    "node": ">=10.16.0"
+  },
+  "dependencies": {
+    "asn1": "^0.2.6",
+    "bcrypt-pbkdf": "^1.0.2"
+  }
+}

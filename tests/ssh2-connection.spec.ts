@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { PassThrough } from 'node:stream'
 import { afterEach, describe, expect, it } from 'vitest'
-import { Server, utils, type Client } from 'ssh2'
+import { Server, utils, type Client } from '#ssh2'
 import { connectSsh2, Ssh2Connection, type SshConnection } from '../src/sessions.js'
 
 const { OPEN_MODE, STATUS_CODE } = utils.sftp

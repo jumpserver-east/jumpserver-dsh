@@ -27,6 +27,14 @@ npx @deepseek-ai/dsh <子命令>
 
 下面命令里的 `dsh` 都可以换成 `npx @deepseek-ai/dsh`。web profile 的配置在 `~/.dsh/profiles/web/`（Windows 为 `%USERPROFILE%\.dsh\profiles\web\`）。
 
+### 从 npm 安装
+
+```sh
+dsh plugin --profile web add @jumpserver-east/jumpserver-dsh
+```
+
+`0.1.1` 起已内置不带原生编译脚本的 `ssh2`，从 npm 安装一般不必改 `allowBuilds`。刚发布的 24 小时内，pnpm 11 可能报 `ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION`，等过截止时间或临时加 `minimumReleaseAge: 0`。
+
 ### 从 GitHub 安装
 
 ```sh
@@ -69,21 +77,21 @@ dsh plugin --profile web add .
 ```json
 {
   "dependencies": {
-    "jumpserver-dsh": "link:/绝对路径/jumpserver-dsh"
+    "@jumpserver-east/jumpserver-dsh": "link:/绝对路径/jumpserver-dsh"
   },
   "dsh": {
     "profile": {
       "bundles": [
         "@deepseek-ai/dsh-base",
         "@deepseek-ai/dsh-web-app",
-        "jumpserver-dsh"
+        "@jumpserver-east/jumpserver-dsh"
       ]
     }
   }
 }
 ```
 
-`dsh plugin add` 会自己核对 `bundles`。若命令很慢或中途失败，可以在 profile 目录直接 link，再把 `jumpserver-dsh` 写进 `dsh.profile.bundles`：
+`dsh plugin add` 会自己核对 `bundles`。若命令很慢或中途失败，可以在 profile 目录直接 link，再把 `@jumpserver-east/jumpserver-dsh` 写进 `dsh.profile.bundles`：
 
 ```sh
 cd ~/.dsh/profiles/web
@@ -92,14 +100,7 @@ pnpm add /绝对路径/jumpserver-dsh
 
 改本地代码后执行 `pnpm build`，再重启 dsh。
 
-profile 的 `pnpm-workspace.yaml` 建议至少有：
-
-```yaml
-allowBuilds:
-  jumpserver-dsh: true
-```
-
-若 pnpm 提示忽略了 `ssh2` 的构建脚本，再加上 `ssh2: true`（以及它依赖的 `cpu-features`）。
+本地 `add .` 是 `link:`，一般不必再为 `ssh2` 改 `allowBuilds`。GitHub 安装仍要批准插件自己的 `prepare`（`tsc`）。
 
 ## 配置
 
@@ -141,7 +142,7 @@ Access Key 在 JumpServer「个人设置」里创建。跑 dsh 的这台机器�
 ```yaml
 - update:
     - id: jumpserver
-      name: jumpserver-dsh
+      name: "@jumpserver-east/jumpserver-dsh"
       config:
         baseUrl: https://jms.example.com
         tlsRejectUnauthorized: true

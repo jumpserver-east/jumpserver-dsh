@@ -1,6 +1,6 @@
 {
-  "name": "jumpserver-dsh",
-  "version": "0.1.0",
+  "name": "@jumpserver-east/jumpserver-dsh",
+  "version": "0.1.1",
   "description": "DeepSeek Harness plugin: manage JumpServer assets and operate on them through KoKo",
   "license": "MIT",
   "author": "lettimepassby <86416409@qq.com>",
@@ -29,10 +29,17 @@
     },
     "./package.json": "./package.json"
   },
+  "imports": {
+    "#ssh2": "./vendor/ssh2/lib/index.js"
+  },
   "files": [
     "lib",
-    "cordis.patch.yml"
+    "cordis.patch.yml",
+    "vendor/ssh2"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=18.18.0"
   },
@@ -71,7 +78,8 @@
     }
   },
   "dependencies": {
-    "ssh2": "^1.17.0",
+    "asn1": "^0.2.6",
+    "bcrypt-pbkdf": "^1.0.2",
     "undici": "^7.16.0"
   },
   "devDependencies": {

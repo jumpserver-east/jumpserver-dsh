@@ -1,4 +1,4 @@
-import type { Client, ClientChannel } from 'ssh2'
+import type { Client, ClientChannel } from '#ssh2'
 import type { ExecResult, FileReadResult, SshConnection } from './sessions.js'
 import { JumpServerError } from './types.js'
 

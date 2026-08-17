@@ -1,5 +1,6 @@
 node_modules/
-lib/
+.pnpm-store/
+/lib/
 coverage/
 *.log
 .DS_Store

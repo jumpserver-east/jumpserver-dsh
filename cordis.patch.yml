@@ -2,4 +2,4 @@
 # Users override this row in their profile cordis.patch.yml (last write wins per id).
 - insert:
     - id: jumpserver
-      name: jumpserver-dsh
+      name: "@jumpserver-east/jumpserver-dsh"

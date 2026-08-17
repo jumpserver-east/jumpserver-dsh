@@ -12,7 +12,7 @@ import {
   stripAnsi,
   terminalQueryReplies,
 } from '../src/db-session.js'
-import type { Client, ClientChannel } from 'ssh2'
+import type { Client, ClientChannel } from '#ssh2'
 
 describe('looksLikeDbPrompt', () => {
   it('matches usql and sqlplus prompts', () => {

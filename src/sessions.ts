@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Client, type SFTPWrapper } from 'ssh2'
+import { Client, type SFTPWrapper } from '#ssh2'
 import { Ssh2DbConnection } from './db-session.js'
 import { formatNetworkError } from './errors.js'
 import { isDatabaseProtocol } from './protocol.js'
